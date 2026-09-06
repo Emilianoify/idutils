@@ -1,0 +1,152 @@
+@import 'tailwindcss';
+
+/*
+  Los tokens de IDUtils.
+
+  Este archivo es el sistema de diseño entero. No hay tailwind.config: en
+  Tailwind 4 los tokens viven en CSS y de acá salen las utilidades
+  (`bg-field`, `text-expiring`, `font-display`).
+
+  Los NOMBRES van en inglés porque son identificadores: terminan siendo clases
+  que se escriben en el código. Lo único en castellano de todo el sistema es lo
+  que lee el operador.
+
+  LA REGLA QUE ORDENA TODO: los cuatro colores de estado no son decoración. Son
+  `AuthorizationStatus` del dominio, dibujado. Si alguien agrega un estado al
+  enum, acá tiene que aparecer su color, y si acá aparece un color de estado que
+  el dominio no define, sobra.
+*/
+@theme {
+  /* --- Superficies -------------------------------------------------------
+     El oscuro es verde profundo, no un negro neutro, y el claro tiene sesgo
+     verde, no crema. Los neutros están elegidos, no heredados. */
+  --color-field: #0b1610;
+  --color-field-raised: #13221a;
+  --color-field-line: #1f3327;
+
+  --color-panel: #f1f4ee;
+  --color-panel-line: #d2dbcf;
+
+  /* --- Texto -------------------------------------------------------------
+     `ink` va sobre superficie clara, `light` sobre superficie oscura. */
+  --color-ink: #0b1610;
+  --color-ink-muted: #4a5a50;
+
+  --color-light: #e8efe7;
+  --color-light-muted: #9cb0a2;
+  --color-light-faint: #6c8375;
+
+  /* --- Los cuatro estados de cobertura ------------------------------------
+     Uno por cada valor de AuthorizationStatus. */
+  --color-covered: #57ac80;
+  --color-expiring: #e08b42;
+  --color-expired: #b85a3d;
+  /* Gris verdoso: nunca autorizada es AUSENCIA, no tardanza. Por eso no
+     comparte color con lo vencido. */
+  --color-unauthorized: #7e9288;
+
+  /* --- Acción -------------------------------------------------------------
+     Coincide con `expiring` a propósito: en este sistema, actuar ES reclamar.
+     Es un token aparte igual, para que el día que la acción cambie de color no
+     se lleve puesto un estado del dominio. */
+  --color-action: #e08b42;
+  --color-action-bright: #ee9748;
+
+  /* --- Tipografía --------------------------------------------------------
+     Servidas desde el paquete, no desde Google: una instalación puede no tener
+     internet de salida (D3). */
+  --font-display: 'Fraunces Variable', 'Iowan Old Style', Georgia, serif;
+  --font-sans: 'Archivo Variable', 'Segoe UI', system-ui, sans-serif;
+}
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body {
+    /* Explícito: si el fondo fuera transparente, la página tomaría el del
+       navegador y el tema de otro decidiría cómo se ve el nuestro. */
+    background: var(--color-field);
+    color: var(--color-light);
+    font-family: var(--font-sans);
+    font-size: 15px;
+    line-height: 1.55;
+  }
+
+  /* Los números se leen en columna en todo el sistema: días que faltan,
+     cantidades de frecuencia, contadores del tablero. */
+  :where(td, .tabular) {
+    font-variant-numeric: tabular-nums;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-action);
+    outline-offset: 2px;
+  }
+}
+
+/*
+  Tamaño óptico de Fraunces, por rol.
+
+  Una tipografía con eje óptico no es la misma forma a 25px que a 55px: a tamaño
+  grande cierra el espaciado y sube el contraste, a tamaño chico los abre para
+  que se lea. Va como utilidad y no suelto en cada componente porque es parte de
+  la escala, igual que el cuerpo y el peso.
+*/
+@utility optical-display {
+  font-variation-settings: 'opsz' 120;
+}
+
+@utility optical-heading {
+  font-variation-settings: 'opsz' 60;
+}
+
+@utility optical-mark {
+  font-variation-settings: 'opsz' 40;
+}
+
+/*
+  El único movimiento del sistema: la barra que se llena.
+
+  Es el tiempo consumiéndose, que es el tema del producto. Todo lo demás está
+  quieto a propósito.
+*/
+@keyframes idutils-meter {
+  to {
+    width: var(--consumed);
+  }
+}
+
+@keyframes idutils-rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@utility meter-fill {
+  width: 0;
+  animation: idutils-meter 1s cubic-bezier(0.22, 0.7, 0.2, 1) forwards;
+  animation-delay: var(--delay, 0ms);
+}
+
+@utility rise {
+  animation: idutils-rise 620ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  animation-delay: var(--delay, 0ms);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .meter-fill {
+    animation: none;
+    width: var(--consumed);
+  }
+
+  .rise {
+    animation: none;
+  }
+}

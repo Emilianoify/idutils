@@ -1,0 +1,28 @@
+# Enfriamiento de versiones recien publicadas, en minutos. 1440 = 24 horas.
+#
+# Asi aterrizan los ataques de cadena de suministro reales: se compromete la
+# cuenta npm de un mantenedor, se publica una version con codigo malicioso, y la
+# ventana de dano son las primeras horas, antes de que alguien lo note y la baje.
+# Esperar un dia deja que el problema lo descubra otro.
+#
+# Explicito y versionado a proposito: si depende del default de pnpm, dos
+# entornos con versiones distintas aplican politicas distintas, y el desacuerdo
+# aparece recien en el deploy.
+minimumReleaseAge: 1440
+
+# Hotfixes transitivos dentro de sus majors. Prisma 7.10 fija una versión 3.x
+# vulnerable de mysql2 y Express permite qs ^6.x; se usan versiones corregidas
+# sin cambiar el major de ninguno.
+overrides:
+  mysql2: 3.23.1
+  qs: 6.16.0
+
+# minimumReleaseAgeExclude va aca solo para un hotfix critico que no pueda
+# esperar, y con fecha de vencimiento. No es la salida cuando `pnpm install`
+# molesta: para eso se fija la version anterior, que ya paso el enfriamiento.
+
+allowBuilds:
+  '@prisma/engines': true
+  argon2: true
+  esbuild: true
+  prisma: true

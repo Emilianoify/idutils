@@ -1,0 +1,553 @@
+// Core de IDUtils. Trece entidades mas las tablas de union.
+//
+// Regla de D4, verificable leyendo este archivo: el core NO menciona `amanda`,
+// `route`, `recorrido` ni `zone`. Si algun dia aparecen aca, deja de ser
+// modular y pasa a ser un monolito con un `if`.
+//
+// Identificadores en ingles, valores de enum en espanol.
+
+generator client {
+  provider        = "prisma-client"
+  output          = "../src/generated/prisma"
+  previewFeatures = ["relationJoins"]
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// Persona y cobertura
+// ---------------------------------------------------------------------------
+
+/// El paciente pertenece a la coordinacion, no a una empresa (D7).
+///
+/// No tiene obra social, numero de afiliado, empresa ni estado: los cuatro son
+/// derivados o viven en otra entidad. El estado sale de los episodios
+/// (`estadoAl`), no de una columna que alguien se olvida de actualizar (D9).
+model Patient {
+  id String @id @default(uuid())
+
+  // Separados desde el dia uno. La planilla trae "PEREZ, JUAN" y esa coma es un
+  // formato de origen, no un contrato: parsearla en tres lugares ya costo caro.
+  lastName  String
+  firstName String @default("")
+
+  /// DNI. Opcional a proposito: no siempre viene, y la unicidad practica la da
+  /// Affiliation, no el documento.
+  documentNumber String?
+  birthDate      DateTime? @db.Date
+
+  addressStreet String
+  addressDetail String?
+
+  /// Obligatorio y siempre FK. Nunca texto libre (D12).
+  localityId String
+  locality   Locality @relation(fields: [localityId], references: [id], onDelete: Restrict)
+
+  notes String @default("")
+
+  contacts     PatientContact[]
+  affiliations Affiliation[]
+  episodes     HomeCareEpisode[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([lastName])
+  @@index([localityId])
+  @@index([documentNumber])
+  @@map("patients")
+}
+
+/// Lista de contactos, no un campo `telefono` en Patient (D15). El que atiende
+/// el timbre, el hijo que autoriza y el de la urgencia suelen ser tres personas.
+model PatientContact {
+  id        String  @id @default(uuid())
+  patientId String
+  patient   Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  name         String
+  /// Vinculo con el paciente: hijo, esposa, cuidadora, encargado.
+  relationship String
+  phone        String
+  isPrimary    Boolean @default(false)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([patientId])
+  @@map("patient_contacts")
+}
+
+/// La identidad (obra social, N de afiliado) identifica a la AFILIACION, no a
+/// la persona (D8). Cambio de obra social = se cierra esta con `to` y se abre
+/// otra; el paciente sigue siendo el mismo.
+model Affiliation {
+  id String @id @default(uuid())
+
+  patientId String
+  patient   Patient @relation(fields: [patientId], references: [id], onDelete: Restrict)
+
+  insuranceProviderId String
+  insuranceProvider   InsuranceProvider @relation(fields: [insuranceProviderId], references: [id], onDelete: Restrict)
+
+  /// Normalizado en un solo lugar: src/shared/normalization/memberNumber.ts.
+  /// Ceros a la izquierda, guiones y espacios. Si esa normalizacion se copia en
+  /// tres capas, es el bug del parser otra vez.
+  memberNumber String
+
+  from DateTime  @db.Date
+  /// null = vigente.
+  to   DateTime? @db.Date
+
+  episodes HomeCareEpisode[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  // La unicidad real es PARCIAL: unico (insuranceProviderId, memberNumber)
+  // SOLO entre las vigentes. El paciente puede volver a la misma obra social
+  // con el mismo numero anos despues, y eso son dos filas legitimas.
+  // Prisma no expresa indices parciales: va en prisma/sql/core_invariants.sql.
+  @@index([insuranceProviderId, memberNumber])
+  @@index([patientId])
+  @@map("affiliations")
+}
+
+/// Razon social literal, 1:1 con la fuente. Nada de siglas inventadas: un
+/// catalogo "prolijo" sin tabla de alias pierde matcheos en silencio.
+///
+/// No lleva `isSwissAudited`: eso es del modulo Amanda (D4).
+model InsuranceProvider {
+  id     String  @id @default(uuid())
+  name   String  @unique
+  active Boolean @default(true)
+
+  affiliations Affiliation[]
+  companies    CompanyInsuranceProvider[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@map("insurance_providers")
+}
+
+/// La empresa de ID que subcontrata a la coordinacion. Es a quien se le
+/// reclama (D10): "a quien reclamar" no es un campo, es esta relacion.
+model ContractingCompany {
+  id     String  @id @default(uuid())
+  name   String  @unique
+  active Boolean @default(true)
+
+  contactName  String?
+  contactPhone String?
+  contactEmail String?
+
+  insuranceProviders CompanyInsuranceProvider[]
+  careServices       CareService[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@map("contracting_companies")
+}
+
+/// La cobertura de la coordinacion es DERIVADA, nunca propia (D2). No existe
+/// relacion coordinacion -> obra social: se llega a traves de una empresa.
+///
+/// Esta tabla es la que impide cargar un paciente de una obra social bajo una
+/// empresa que no tiene ese convenio, en vez de confiar en el criterio del
+/// operador.
+model CompanyInsuranceProvider {
+  id String @id @default(uuid())
+
+  contractingCompanyId String
+  contractingCompany   ContractingCompany @relation(fields: [contractingCompanyId], references: [id], onDelete: Cascade)
+
+  insuranceProviderId String
+  insuranceProvider   InsuranceProvider @relation(fields: [insuranceProviderId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@unique([contractingCompanyId, insuranceProviderId])
+  @@map("company_insurance_providers")
+}
+
+// ---------------------------------------------------------------------------
+// Episodio y prestacion
+// ---------------------------------------------------------------------------
+
+/// El periodo de internacion domiciliaria, que abre y cierra (D9).
+///
+/// Se llama HomeCareEpisode y no Internacion porque en la jerga la internacion
+/// domiciliaria ES el episodio, e "internado" es justamente lo que lo termina.
+///
+/// La internacion en sanatorio no se guarda: es el hueco entre un episodio
+/// cerrado con INTERNACION y el siguiente. El motivo de cierre es lo que
+/// califica ese hueco.
+model HomeCareEpisode {
+  id String @id @default(uuid())
+
+  patientId String
+  patient   Patient @relation(fields: [patientId], references: [id], onDelete: Restrict)
+
+  /// Exactamente una: cambiar de afiliacion cierra el episodio (D9).
+  affiliationId String
+  affiliation   Affiliation @relation(fields: [affiliationId], references: [id], onDelete: Restrict)
+
+  /// Dato de entrada, JAMAS now(). Puede ser futuro: cuando avisan que el
+  /// paciente vuelve el jueves, se abre el episodio con fecha del jueves.
+  /// Por eso "activo" es "episodio abierto Y ya comenzado", no solo abierto.
+  startsOn DateTime @db.Date
+
+  /// null = abierto.
+  endsOn DateTime? @db.Date
+
+  /// Obligatorio si endsOn no es null. Decide en que bandeja de trabajo cae el
+  /// paciente: sin motivo, un hueco podria ser una internacion, una baja o un
+  /// cambio de obra social.
+  closeReason CloseReason?
+
+  /// Ej.: en que sanatorio quedo internado.
+  closeNote String?
+
+  careServices CareService[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  // Invariante: no hay episodios solapados por paciente. NO es una validacion
+  // de aplicacion, va en la base con EXCLUDE USING gist, en
+  // prisma/sql/core_invariants.sql. Prisma no expresa EXCLUDE.
+  @@index([patientId])
+  @@index([affiliationId])
+  @@index([startsOn])
+  @@map("home_care_episodes")
+}
+
+enum CloseReason {
+  INTERNACION
+  ALTA_MEDICA
+  CAMBIO_OBRA_SOCIAL
+  FIN_COBERTURA
+  SUSPENSION_EMPRESA
+  BAJA_VOLUNTARIA
+  MUDANZA_FUERA_DE_ZONA
+  FALLECIMIENTO
+}
+
+/// La prestacion: la entidad central del sistema (D6).
+///
+/// Los catalogos no vencen. Lo que vence es "kinesiologia de Juan Perez, por
+/// SanityCare, la hace Yolanda". Todo el dashboard son consultas sobre esta
+/// tabla y sobre HomeCareEpisode; ninguna sale de los catalogos.
+model CareService {
+  id String @id @default(uuid())
+
+  /// Cuelga del episodio, NO del paciente (D9).
+  episodeId String
+  episode   HomeCareEpisode @relation(fields: [episodeId], references: [id], onDelete: Restrict)
+
+  specialtyId String
+  specialty   Specialty @relation(fields: [specialtyId], references: [id], onDelete: Restrict)
+
+  /// Quien la contrata y a quien se le reclama. Entra en la clave de unicidad
+  /// a proposito: el mismo paciente puede recibir kinesiologia por una empresa
+  /// y enfermeria por otra (D1, D7).
+  contractingCompanyId String
+  contractingCompany   ContractingCompany @relation(fields: [contractingCompanyId], references: [id], onDelete: Restrict)
+
+  /// Nullable: la prestacion puede existir sin profesional asignado.
+  professionalId String?
+  professional   Professional? @relation(fields: [professionalId], references: [id], onDelete: SetNull)
+
+  /// Baja individual de la prestacion sin cerrar el episodio.
+  endedOn DateTime? @db.Date
+
+  authorizations Authorization[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  // Unico (episodeId, specialtyId, contractingCompanyId) ENTRE LAS ACTIVAS.
+  // Indice parcial: va en prisma/sql/core_invariants.sql.
+  @@index([episodeId])
+  @@index([contractingCompanyId])
+  @@index([specialtyId])
+  @@index([professionalId])
+  @@map("care_services")
+}
+
+/// Una fila por periodo autorizado (D10). La prestacion vive; las
+/// autorizaciones se suceden abajo.
+///
+/// La linea de tiempo para una auditoria no hay que construirla: es esta lista
+/// ordenada por fecha.
+model Authorization {
+  id String @id @default(uuid())
+
+  careServiceId String
+  careService   CareService @relation(fields: [careServiceId], references: [id], onDelete: Cascade)
+
+  /// Referencia al catalogo, para saber cual se eligio.
+  frequencyId String
+  frequency   Frequency @relation(fields: [frequencyId], references: [id], onDelete: Restrict)
+
+  /// CONGELADOS al autorizar. La fuente de que se autorizo en agosto es esta
+  /// autorizacion; el catalogo es un ayudante de carga, no la verdad. Si el
+  /// catalogo cambia despues, las autorizaciones pasadas no se reescriben.
+  frequencyAmount Int
+  frequencyUnit   FrequencyUnit
+
+  validFrom  DateTime @db.Date
+  validUntil DateTime @db.Date
+
+  /// Cuando se reclamo la renovacion. Permite responder "cuantas veces tuve que
+  /// reclamar esta prestacion", que es el dato con el que se pelea un contrato.
+  claimedAt DateTime? @db.Date
+
+  /// N de autorizacion de la empresa, observaciones.
+  notes String @default("")
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([careServiceId])
+  @@index([validUntil])
+  @@map("authorizations")
+}
+
+// ---------------------------------------------------------------------------
+// Catalogos
+// ---------------------------------------------------------------------------
+
+/// No lleva `auditedByAmanda`: eso es del modulo Amanda (D4).
+model Specialty {
+  id   String @id @default(uuid())
+  name String @unique
+
+  /// El sustantivo con el que se renderiza la frecuencia. "Visitas" y
+  /// "sesiones" no son dos tipos de frecuencia: es la misma matematica con
+  /// otro sustantivo, y el sustantivo lo define la especialidad (D11).
+  serviceUnit ServiceUnit @default(VISITA)
+  active      Boolean     @default(true)
+
+  frequencies   SpecialtyFrequency[]
+  professionals ProfessionalSpecialty[]
+  careServices  CareService[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@map("specialties")
+}
+
+enum ServiceUnit {
+  VISITA
+  SESION
+  HORA
+}
+
+/// Matematica pura, sin sustantivo: `2 semanales` es UNA SOLA FILA, que se
+/// renderiza "2 visitas semanales" para clinico y "2 sesiones semanales" para
+/// kinesiologia (D11).
+///
+/// Seed basico en la INSTALACION, nunca reaplicado en updates: si se reaplica,
+/// resucita frecuencias que la coordinacion borro. Baja logica, nunca DELETE.
+/// No se edita en el lugar: editar es crear nueva y desactivar la vieja.
+model Frequency {
+  id     String        @id @default(uuid())
+  amount Int
+  unit   FrequencyUnit
+  active Boolean       @default(true)
+
+  specialties    SpecialtyFrequency[]
+  authorizations Authorization[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@unique([amount, unit])
+  @@map("frequencies")
+}
+
+enum FrequencyUnit {
+  SEMANAL
+  MENSUAL
+}
+
+/// ES el filtro del selector, no una feature de UI que haya que acordarse de
+/// programar: asignar Medico Clinico no ofrece 100 frecuencias, ofrece las que
+/// estan relacionadas con clinico (D11).
+model SpecialtyFrequency {
+  id String @id @default(uuid())
+
+  specialtyId String
+  specialty   Specialty @relation(fields: [specialtyId], references: [id], onDelete: Cascade)
+
+  frequencyId String
+  frequency   Frequency @relation(fields: [frequencyId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@unique([specialtyId, frequencyId])
+  @@map("specialty_frequencies")
+}
+
+/// El profesional de la coordinacion (D13).
+///
+/// taxId, bankAccount y bankAlias son DATOS DE CONTACTO DE PAGO, no un modulo
+/// de liquidacion: IDUtils no calcula honorarios ni lleva cuenta corriente.
+/// Son datos financieros de terceros: nunca en logs, nunca en exports que no
+/// los pidan explicitamente.
+model Professional {
+  id String @id @default(uuid())
+
+  lastName  String
+  firstName String @default("")
+
+  documentNumber String?
+
+  /// Matricula.
+  licenseNumber String?
+  phone         String?
+  email         String?
+
+  taxId       String?
+  bankAccount String?
+  bankAlias   String?
+
+  active Boolean @default(true)
+
+  specialties  ProfessionalSpecialty[]
+  careServices CareService[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([lastName])
+  @@map("professionals")
+}
+
+/// Relacion, no un campo: Yolanda hace kinesiologia motora y respiratoria.
+/// Sirve para validar la asignacion a una prestacion (D13).
+model ProfessionalSpecialty {
+  id String @id @default(uuid())
+
+  professionalId String
+  professional   Professional @relation(fields: [professionalId], references: [id], onDelete: Cascade)
+
+  specialtyId String
+  specialty   Specialty @relation(fields: [specialtyId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@unique([professionalId, specialtyId])
+  @@map("professional_specialties")
+}
+
+/// Provincia y localidad son core: donde vive el paciente. Zona NO esta aca,
+/// es del modulo de recorridos, y es otra cosa: como se agrupan para armar un
+/// movil (D12).
+model Province {
+  id   String @id @default(uuid())
+  name String @unique
+
+  localities Locality[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@map("provinces")
+}
+
+model Locality {
+  id String @id @default(uuid())
+
+  provinceId String
+  province   Province @relation(fields: [provinceId], references: [id], onDelete: Restrict)
+
+  name       String
+  postalCode String?
+
+  patients Patient[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@unique([provinceId, name])
+  @@index([name])
+  @@map("localities")
+}
+
+// ---------------------------------------------------------------------------
+// Usuarios
+// ---------------------------------------------------------------------------
+
+/// Tres roles, y no mas hasta que duela (D14). Un Role + Permission +
+/// RolePermission es lo que se construye cuando el negocio lo pide, no antes.
+model User {
+  id           String  @id @default(uuid())
+  email        String  @unique
+  passwordHash String
+  name         String
+  role         Role    @default(OPERADOR)
+  active       Boolean @default(true)
+
+  /// Invalida los tokens emitidos al cambiar la password o dar de baja.
+  tokenVersion Int @default(0)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  refreshSessions RefreshSession[]
+
+  @@map("users")
+}
+
+/// Una familia por inicio de sesion/dispositivo. Solo se guarda el identificador
+/// opaco del refresh vigente; el JWT bearer nunca toca la base.
+model RefreshSession {
+  id String @id
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  currentTokenId String    @unique
+  expiresAt      DateTime
+  revokedAt      DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("refresh_sessions")
+}
+
+enum Role {
+  ADMIN
+  OPERADOR
+  LECTOR
+}

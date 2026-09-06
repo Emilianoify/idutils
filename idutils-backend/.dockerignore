@@ -1,0 +1,31 @@
+# Lo que NO entra al contexto de build.
+#
+# No es solo por tamaño: `.env` acá adentro terminaría copiado a una capa de la
+# imagen, y una capa no se borra — queda en el historial aunque el archivo se
+# elimine después.
+
+.env
+.env.*
+!.env.example
+
+node_modules
+dist
+
+# Se regenera en el build contra el schema de esta versión. Copiarlo desde
+# afuera es como una imagen termina con un cliente que no coincide con su
+# propio schema.
+src/generated
+
+# No corren adentro de la imagen y arrastran el contexto sin necesidad.
+tests
+vitest.config.ts
+vitest.integration.config.ts
+tsconfig.test.json
+eslint.config.js
+
+.git
+.gitignore
+Dockerfile
+.dockerignore
+README.md
+*.log

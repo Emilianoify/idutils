@@ -1,0 +1,17 @@
+# Enfriamiento de versiones recien publicadas, en minutos. 1440 = 24 horas.
+#
+# Misma politica que el backend, y por la misma razon: asi aterrizan los ataques
+# de cadena de suministro reales. Se compromete la cuenta npm de un mantenedor,
+# se publica una version con codigo malicioso, y la ventana de dano son las
+# primeras horas. Esperar un dia deja que el problema lo descubra otro.
+#
+# En el frontend importa mas todavia: el arbol de dependencias de React y Next
+# es enorme, y cada paquete transitivo es una cuenta npm que alguien puede
+# perder.
+minimumReleaseAge: 1440
+
+allowBuilds:
+  '@tailwindcss/oxide': true
+  esbuild: true
+  sharp: true
+  unrs-resolver: true

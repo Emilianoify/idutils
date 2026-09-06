@@ -1,0 +1,12 @@
+name: idutils-local
+
+# Explicit localhost-only development override. Production uses docker-compose.yml
+# alone and therefore requires Secure cookies plus one trusted TLS proxy hop.
+services:
+  backend:
+    environment:
+      NODE_ENV: development
+      COOKIE_SECURE: 'false'
+      TRUST_PROXY_HOPS: '0'
+    ports:
+      - '127.0.0.1:${BACKEND_PORT:-4000}:4000'

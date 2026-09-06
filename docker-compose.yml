@@ -1,0 +1,101 @@
+name: idutils
+
+# IDUtils — una instalación por coordinación (D3).
+#
+# Tres servicios y un orden que importa:
+#
+#   db       Postgres, con su volumen. Lo único con estado.
+#   migrate  corre UNA vez, aplica las migraciones y termina.
+#   backend  arranca recién cuando migrate terminó bien.
+#
+# Las migraciones NO corren adentro del backend a propósito. Si el proceso que
+# atiende pedidos también supiera migrar, tendría el CLI de Prisma y el schema
+# adentro, y cualquier ejecución remota de código podría alterar la base. Acá el
+# backend no tiene con qué.
+
+services:
+  db:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?falta POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?falta POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:?falta POSTGRES_DB}
+      # Subdirectorio del punto de montaje, no la raíz. Es lo que recomienda la
+      # imagen oficial y lo que hace que el volumen sobreviva a un cambio de
+      # versión mayor de Postgres, que mueve su directorio por defecto.
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      # `migrate` espera esto. Sin healthcheck, `depends_on` sólo garantiza que
+      # el contenedor arrancó, no que Postgres acepte conexiones, y la primera
+      # migración falla una de cada tres veces.
+      test: ['CMD-SHELL', 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    # Sin `ports:` a propósito. La base la usa el backend por la red interna;
+    # publicarla al host es exponer Postgres para nada. Para inspeccionarla:
+    #   docker compose exec db psql -U idutils -d idutils
+    networks: [interna]
+
+  migrate:
+    build:
+      context: ./idutils-backend
+      target: build
+    # Uno solo: `migrate deploy` toma un lock de aplicación en Postgres, pero un
+    # solo intento por despliegue deja los logs legibles.
+    command: ['pnpm', 'prisma', 'migrate', 'deploy']
+    restart: 'no'
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?schema=public
+      # Para `docker compose run --rm migrate pnpm db:seed`. El servicio de
+      # migraciones es también el que tiene con qué sembrar: mismo motivo por el
+      # que el backend no lo tiene.
+      SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL:-admin@idutils.local}
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-}
+      SEED_ADMIN_NAME: ${SEED_ADMIN_NAME:-Administración}
+      SEED_DEMO: ${SEED_DEMO:-false}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks: [interna]
+
+  backend:
+    build:
+      context: ./idutils-backend
+      target: runtime
+    restart: unless-stopped
+    environment:
+      # La contraseña viaja adentro de una URL: si tiene @ : / ? # o %, hay que
+      # escribirla percent-encoded o la URL se parte en el lugar equivocado y el
+      # error habla de un host que nadie escribió.
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?schema=public
+      NODE_ENV: production
+      JWT_SECRET: ${JWT_SECRET:?falta JWT_SECRET}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?falta JWT_REFRESH_SECRET}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:?falta ALLOWED_ORIGINS}
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
+      TRUST_PROXY_HOPS: ${TRUST_PROXY_HOPS:-1}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    ports:
+      # Fail closed: only processes on this host can reach the API directly.
+      # Never change this to 0.0.0.0 unless another network firewall blocks it.
+      - '127.0.0.1:${BACKEND_PORT:-4000}:4000'
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        # Arranca recién cuando las migraciones terminaron BIEN. Si fallan, el
+        # backend no levanta: es preferible una API caída a una API sirviendo
+        # sobre un esquema a medio migrar.
+        condition: service_completed_successfully
+    networks: [interna]
+
+volumes:
+  postgres-data:
+
+networks:
+  interna:

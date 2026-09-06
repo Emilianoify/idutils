@@ -1,0 +1,11 @@
+# El .env del despliegue: es lo único que distingue una instalación de otra.
+# Lleva la contraseña de la base y los secretos de firma de tokens.
+.env
+.env.*
+!.env.example
+
+node_modules/
+dist/
+*.log
+# Local AI runtime state
+.atl/

@@ -1,0 +1,11 @@
+# SDD artifact store declaration.
+#
+# This file exists for ONE reason: `gentle-ai sdd-status` resolves the artifact
+# store that the workspace DECLARES here. Without it the dispatcher falls back to
+# `openspec` and looks for change folders that this project never creates.
+#
+# The declared store is `engram`: SDD artifacts (proposal, specs, design, tasks,
+# apply-progress, verify-report) live in Engram under `sdd/{change-name}/...`,
+# not on disk. No `openspec/specs/` or `openspec/changes/` tree is created, and
+# nothing else belongs in this directory.
+artifact_store: engram
