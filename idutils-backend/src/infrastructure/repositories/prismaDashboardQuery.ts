@@ -28,7 +28,14 @@ export function createPrismaDashboardQuery(context: PrismaContext): IDashboardQu
         where: {
           deletedAt: null,
           endedOn: null,
-          episode: { deletedAt: null, endsOn: null, startsOn: { lte: asOf } },
+          // Cubre la fecha, no "sin cierre": un episodio cerrado para el
+          // jueves sigue prestando hasta el jueves. Es el mismo rango
+          // semiabierto que usa `currentEpisodeAt` para el estado del paciente.
+          episode: {
+            deletedAt: null,
+            startsOn: { lte: asOf },
+            OR: [{ endsOn: null }, { endsOn: { gt: asOf } }],
+          },
         },
         include: {
           episode: { include: { patient: true } },
@@ -65,7 +72,11 @@ export function createPrismaDashboardQuery(context: PrismaContext): IDashboardQu
       // a medio hacer, y esconderla del contador es perderla de vista.
       const groups = await executor.homeCareEpisode.groupBy({
         by: ['patientId'],
-        where: { deletedAt: null, endsOn: null, startsOn: { lte: asOf } },
+        where: {
+          deletedAt: null,
+          startsOn: { lte: asOf },
+          OR: [{ endsOn: null }, { endsOn: { gt: asOf } }],
+        },
       })
 
       return groups.length

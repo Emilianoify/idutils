@@ -92,8 +92,20 @@ export interface IInsuranceProviderRepository {
 
 export interface ILocalityRepository {
   findById(id: string): Promise<Locality | null>
+  findProvinceById(id: string): Promise<Province | null>
   listProvinces(): Promise<Province[]>
   listByProvince(provinceId: string): Promise<Locality[]>
   /** Busqueda por nombre para el autocompletado del domicilio. */
   search(text: string, limit: number): Promise<Locality[]>
+  /**
+   * El alta de una localidad la hace el ADMIN, catalogo adentro.
+   *
+   * El seed de instalacion carga las 24 provincias y NINGUNA localidad: cada
+   * coordinacion atiende su zona, y una lista inventada de miles de nombres es
+   * peor que ninguna. Pero `POST /api/patients` exige `localityId`, asi que sin
+   * esta operacion una instalacion real no puede dar de alta a nadie.
+   */
+  create(
+    locality: Omit<Locality, 'id' | 'createdAt' | 'updatedAt' | 'deletedAt'>,
+  ): Promise<Locality>
 }

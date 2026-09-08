@@ -21,6 +21,7 @@ import {
   createContractingCompanySchema,
   createFrequencySchema,
   createInsuranceProviderSchema,
+  createLocalitySchema,
   createProfessionalSchema,
   createSpecialtySchema,
   createUserSchema,
@@ -67,6 +68,7 @@ export function createAdminController(dependencies: HttpDependencies): {
   setCompanyInsuranceProviders: RequestHandler
   listInsuranceProviders: RequestHandler
   createInsuranceProvider: RequestHandler
+  createLocality: RequestHandler
   listUsers: RequestHandler
   createUser: RequestHandler
   changeUserPassword: RequestHandler
@@ -311,6 +313,35 @@ export function createAdminController(dependencies: HttpDependencies): {
         response,
         SUCCESS_MESSAGES.ADMIN.INSURANCE_PROVIDER_CREATED,
         await infrastructure.insuranceProviders.create(body),
+      )
+    },
+
+    // --- Localidades ------------------------------------------------------
+    /**
+     * Sin esto, una instalación real no puede dar de alta a nadie.
+     *
+     * El seed carga las 24 provincias y ninguna localidad —cada coordinación
+     * atiende su zona (D12)— pero `POST /api/patients` exige `localityId`. Con
+     * `SEED_DEMO` no se nota, porque la demo crea una; en la instalación de una
+     * coordinación de verdad el selector de domicilio llega vacío y el alta no
+     * tiene salida.
+     *
+     * La provincia se busca antes para poder contestar 404 con el motivo. La FK
+     * también la protege, pero su mensaje es genérico: "alguno de los datos
+     * relacionados no existe" no le dice al operador cuál.
+     */
+    createLocality: async (request: Request, response: Response): Promise<void> => {
+      const body = createLocalitySchema.parse(request.body)
+
+      const province = await infrastructure.localities.findProvinceById(body.provinceId)
+      if (province === null) {
+        throw new AppError(404, ERROR_MESSAGES.CATALOG.PROVINCE_NOT_FOUND)
+      }
+
+      sendCreated(
+        response,
+        SUCCESS_MESSAGES.ADMIN.LOCALITY_CREATED,
+        await infrastructure.localities.create(body),
       )
     },
 

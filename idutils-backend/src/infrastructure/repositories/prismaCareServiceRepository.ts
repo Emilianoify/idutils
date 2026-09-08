@@ -59,10 +59,22 @@ export function createPrismaCareServiceRepository(context: PrismaContext): ICare
         where: {
           deletedAt: null,
           endedOn: null,
-          // Activa = ademas de la prestacion, el episodio abierto y ya
-          // comenzado. Una prestacion de un episodio cerrado no vence: ya no
-          // se presta.
-          episode: { deletedAt: null, endsOn: null, startsOn: { lte: asOf } },
+          /**
+           * Activa = el episodio CUBRE la fecha, no "no tiene cierre".
+           *
+           * El rango es semiabierto '[)', el mismo que usa `currentEpisodeAt`
+           * para decidir si el paciente esta activo. Preguntar `endsOn: null`
+           * dejaba afuera al episodio con cierre PROGRAMADO: cerrar el 7/9
+           * estando a 6/9 es avisar que el paciente se va el jueves, y hasta
+           * el jueves se le sigue prestando. Ese paciente aparecia ACTIVO en su
+           * ficha y su prestacion por vencer no llegaba al tablero — que es
+           * justo el reclamo que el sistema existe para no perder.
+           */
+          episode: {
+            deletedAt: null,
+            startsOn: { lte: asOf },
+            OR: [{ endsOn: null }, { endsOn: { gt: asOf } }],
+          },
         },
         include: {
           authorizations: {

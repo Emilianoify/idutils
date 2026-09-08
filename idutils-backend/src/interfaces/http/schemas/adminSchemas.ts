@@ -109,6 +109,26 @@ export const createInsuranceProviderSchema = z.object({
   name: z.string().min(1, { error: 'La obra social necesita un nombre' }),
 })
 
+// --- Localidades ------------------------------------------------------------
+
+/**
+ * El alta de localidad, que es lo que hace instalable el catálogo de domicilio.
+ *
+ * El seed carga las 24 provincias y ninguna localidad: cada coordinación
+ * atiende su zona (D12), y una lista inventada de miles de nombres es peor que
+ * ninguna. La provincia es siempre una FK — el par (provincia, nombre) es único
+ * en la base, así que la misma localidad no entra dos veces.
+ *
+ * No hay `PUT` ni desactivación: hay pacientes apuntando a la localidad, y su
+ * domicilio es parte de la historia. Corregir un nombre mal escrito es tema
+ * aparte y todavía no tiene regla decidida.
+ */
+export const createLocalitySchema = z.object({
+  provinceId: idSchema,
+  name: z.string().min(1, { error: 'La localidad necesita un nombre' }),
+  postalCode: z.string().min(1).nullable().default(null),
+})
+
 // --- Usuarios ---------------------------------------------------------------
 
 /**

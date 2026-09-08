@@ -123,6 +123,8 @@ export function createApiRouter(dependencies: HttpDependencies): Router {
   const episodeRouter = Router()
   episodeRouter.post('/', requireRole(...CAN_WRITE), episodes.open)
   episodeRouter.post('/:id/close', requireRole(...CAN_WRITE), episodes.close)
+  // La ficha del paciente trae los episodios; esto trae lo que pasa adentro.
+  episodeRouter.get('/:id/care-services', requireRole(...CAN_READ), episodes.listCareServices)
   router.use('/episodes', episodeRouter)
 
   // --- Prestaciones y autorizaciones --------------------------------------
@@ -197,6 +199,11 @@ export function createApiRouter(dependencies: HttpDependencies): Router {
 
   adminRouter.get('/insurance-providers', admin.listInsuranceProviders)
   adminRouter.post('/insurance-providers', admin.createInsuranceProvider)
+
+  // El catalogo de provincias viene sembrado y se LEE desde `/catalogs`. Las
+  // localidades no: las carga la coordinacion segun su zona (D12), y sin esta
+  // ruta una instalacion real no puede dar de alta a ningun paciente.
+  adminRouter.post('/localities', admin.createLocality)
 
   adminRouter.get('/users', admin.listUsers)
   adminRouter.post('/users', admin.createUser)

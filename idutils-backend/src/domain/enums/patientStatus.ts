@@ -16,8 +16,18 @@ export const PatientStatus = {
   INTERNADO: 'INTERNADO',
   /** Cerrado por cambio de obra social, fin de cobertura o suspension. Bandeja: reautorizar. */
   PENDIENTE_REAUTORIZACION: 'PENDIENTE_REAUTORIZACION',
-  /** Cerrado por alta medica, baja voluntaria o mudanza fuera de zona. */
-  BAJA: 'BAJA',
+  /**
+   * Termino la internacion domiciliaria: alta medica, baja voluntaria o
+   * mudanza fuera de zona.
+   *
+   * Se llama EGRESADO y no BAJA a proposito. "Baja" en una coordinacion
+   * significa cinco cosas distintas —baja de kinesiologia, baja del paciente
+   * cargado por error, baja voluntaria, baja del catalogo— y el operador tiene
+   * que adivinar cual por contexto. "Egreso" significa una sola: la persona
+   * dejo el servicio. Tampoco se usa "alta", que en castellano tira para los
+   * dos lados: alta medica es irse, dar de alta es cargar.
+   */
+  EGRESADO: 'EGRESADO',
   FALLECIDO: 'FALLECIDO',
   /** Cargado en el sistema pero sin ningun episodio todavia. */
   SIN_INICIAR: 'SIN_INICIAR',

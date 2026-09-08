@@ -1,5 +1,7 @@
 import type { Request, RequestHandler, Response } from 'express'
 import { CloseEpisodeUseCase } from '../../../application/useCases/episode/closeEpisodeUseCase.js'
+import { GetCareServiceTimelineUseCase } from '../../../application/useCases/authorization/getCareServiceTimelineUseCase.js'
+import { ListEpisodeCareServicesUseCase } from '../../../application/useCases/careService/listEpisodeCareServicesUseCase.js'
 import { OpenEpisodeUseCase } from '../../../application/useCases/episode/openEpisodeUseCase.js'
 import { SUCCESS_MESSAGES } from '../../../shared/constants/messages.js'
 import { sendCreated, sendOk } from '../../../shared/helpers/responseHelper.js'
@@ -10,6 +12,7 @@ import { closeEpisodeSchema, openEpisodeSchema } from '../schemas/episodeSchemas
 export function createEpisodeController(dependencies: HttpDependencies): {
   open: RequestHandler
   close: RequestHandler
+  listCareServices: RequestHandler
 } {
   const { infrastructure } = dependencies
 
@@ -20,6 +23,20 @@ export function createEpisodeController(dependencies: HttpDependencies): {
   )
 
   const closeUseCase = new CloseEpisodeUseCase(infrastructure.episodes)
+
+  const listCareServicesUseCase = new ListEpisodeCareServicesUseCase(
+    infrastructure.episodes,
+    infrastructure.careServices,
+    new GetCareServiceTimelineUseCase(
+      infrastructure.careServices,
+      infrastructure.episodes,
+      infrastructure.authorizations,
+      infrastructure.specialties,
+      infrastructure.professionals,
+      infrastructure.contractingCompanies,
+      infrastructure.clock,
+    ),
+  )
 
   return {
     /**
@@ -51,6 +68,23 @@ export function createEpisodeController(dependencies: HttpDependencies): {
       const result = await closeUseCase.execute({ episodeId: id, ...body })
 
       sendOk(response, SUCCESS_MESSAGES.EPISODE.CLOSED, result)
+    },
+
+    /**
+     * Las prestaciones del episodio, con su cobertura ya derivada.
+     *
+     * La ficha del paciente trae los episodios pero no lo que se le hace al
+     * paciente adentro de cada uno. Sin esta lectura, una prestacion existe en
+     * la base y no hay pantalla desde donde verla ni asignarle profesional.
+     */
+    listCareServices: async (request: Request, response: Response): Promise<void> => {
+      const { id } = idParamsSchema.parse(request.params)
+
+      sendOk(
+        response,
+        SUCCESS_MESSAGES.CARE_SERVICE.LIST,
+        await listCareServicesUseCase.execute(id),
+      )
     },
   }
 }

@@ -17,16 +17,16 @@ import { WorkQueue } from '../enums/workQueue.js'
  * Es un Record exhaustivo a proposito: el dia que se agregue un CloseReason
  * nuevo al schema, esto NO COMPILA hasta que alguien decida que estado
  * corresponde. Un `switch` con `default` se lo tragaria en silencio, y el
- * paciente aparecerian como BAJA sin que nadie lo haya decidido.
+ * paciente aparecerian como EGRESADO sin que nadie lo haya decidido.
  */
 const STATUS_BY_CLOSE_REASON: Record<CloseReason, PatientStatus> = {
   INTERNACION: PatientStatus.INTERNADO,
   CAMBIO_OBRA_SOCIAL: PatientStatus.PENDIENTE_REAUTORIZACION,
   FIN_COBERTURA: PatientStatus.PENDIENTE_REAUTORIZACION,
   SUSPENSION_EMPRESA: PatientStatus.PENDIENTE_REAUTORIZACION,
-  ALTA_MEDICA: PatientStatus.BAJA,
-  BAJA_VOLUNTARIA: PatientStatus.BAJA,
-  MUDANZA_FUERA_DE_ZONA: PatientStatus.BAJA,
+  ALTA_MEDICA: PatientStatus.EGRESADO,
+  BAJA_VOLUNTARIA: PatientStatus.EGRESADO,
+  MUDANZA_FUERA_DE_ZONA: PatientStatus.EGRESADO,
   FALLECIMIENTO: PatientStatus.FALLECIDO,
 }
 

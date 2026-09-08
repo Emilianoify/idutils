@@ -109,6 +109,7 @@ export const ERROR_MESSAGES = {
     PROFESSIONAL_NOT_FOUND: 'El profesional no existe',
     COMPANY_NOT_FOUND: 'La empresa contratante no existe',
     INSURANCE_PROVIDER_NOT_FOUND: 'La obra social no existe',
+    PROVINCE_NOT_FOUND: 'La provincia no existe',
     ALREADY_INACTIVE: 'Ese registro ya está dado de baja',
     REPLACEMENT_IS_THE_SAME:
       'La frecuencia nueva es idéntica a la anterior. Si no cambia nada, no hace falta reemplazarla',
@@ -182,6 +183,7 @@ export const SUCCESS_MESSAGES = {
     CLOSED: 'Episodio cerrado',
   },
   CARE_SERVICE: {
+    LIST: 'Prestaciones del episodio',
     CREATED: 'Prestación agregada',
     PROFESSIONAL_ASSIGNED: 'Profesional actualizado',
     ENDED: 'Prestación dada de baja',
@@ -217,6 +219,7 @@ export const SUCCESS_MESSAGES = {
     CONTRACTING_COMPANY_CREATED: 'Empresa contratante creada',
     COMPANY_PROVIDERS_SET: 'Convenio actualizado',
     INSURANCE_PROVIDER_CREATED: 'Obra social creada',
+    LOCALITY_CREATED: 'Localidad creada',
     USER_CREATED: 'Usuario creado',
     USERS: 'Usuarios',
   },

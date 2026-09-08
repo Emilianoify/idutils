@@ -357,6 +357,11 @@ export function createPrismaLocalityRepository(context: PrismaContext): ILocalit
       return row === null ? null : toLocality(row)
     },
 
+    async findProvinceById(id) {
+      const row = await executor.province.findFirst({ where: { id, deletedAt: null } })
+      return row === null ? null : toProvince(row)
+    },
+
     async listProvinces() {
       const rows = await executor.province.findMany({
         where: { deletedAt: null },
@@ -383,6 +388,16 @@ export function createPrismaLocalityRepository(context: PrismaContext): ILocalit
       })
 
       return rows.map(toLocality)
+    },
+
+    async create(locality) {
+      // El `@@unique([provinceId, name])` del schema es el que impide dos
+      // Caballito en la misma provincia. Se deja fallar a la base y se traduce,
+      // en vez de consultar antes: entre la consulta y el insert hay una
+      // ventana, y la constraint no la tiene.
+      const row = await withDomainErrors(() => executor.locality.create({ data: locality }))
+
+      return toLocality(row)
     },
   }
 }

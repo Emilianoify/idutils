@@ -47,9 +47,9 @@ describe('statusAt', () => {
       ['CAMBIO_OBRA_SOCIAL', PatientStatus.PENDIENTE_REAUTORIZACION],
       ['FIN_COBERTURA', PatientStatus.PENDIENTE_REAUTORIZACION],
       ['SUSPENSION_EMPRESA', PatientStatus.PENDIENTE_REAUTORIZACION],
-      ['ALTA_MEDICA', PatientStatus.BAJA],
-      ['BAJA_VOLUNTARIA', PatientStatus.BAJA],
-      ['MUDANZA_FUERA_DE_ZONA', PatientStatus.BAJA],
+      ['ALTA_MEDICA', PatientStatus.EGRESADO],
+      ['BAJA_VOLUNTARIA', PatientStatus.EGRESADO],
+      ['MUDANZA_FUERA_DE_ZONA', PatientStatus.EGRESADO],
       ['FALLECIMIENTO', PatientStatus.FALLECIDO],
     ] as const
 

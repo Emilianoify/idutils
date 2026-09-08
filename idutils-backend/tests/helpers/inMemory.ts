@@ -541,6 +541,9 @@ export function createLocalityRepository(store: InMemoryStore): ILocalityReposit
     async findById(id) {
       return store.localities.find((locality) => locality.id === id) ?? null
     },
+    async findProvinceById() {
+      return notImplemented('ILocalityRepository.findProvinceById')
+    },
     async listProvinces() {
       return notImplemented('ILocalityRepository.listProvinces')
     },
@@ -550,18 +553,29 @@ export function createLocalityRepository(store: InMemoryStore): ILocalityReposit
     async search() {
       return notImplemented('ILocalityRepository.search')
     },
+    async create() {
+      return notImplemented('ILocalityRepository.create')
+    },
   }
 }
 
 /** Arma las filas del dashboard cruzando el store, como haria el SQL real. */
 export function createDashboardQuery(store: InMemoryStore): IDashboardQuery {
+  /**
+   * Los episodios que CUBREN la fecha, con el mismo rango semiabierto que la
+   * query real y que `currentEpisodeAt`.
+   *
+   * No es "sin cierre": un episodio cerrado para el jueves sigue prestando
+   * hasta el jueves. Si este fake dijera otra cosa que la query de Prisma, los
+   * tests pasarian verdes sobre una regla que en produccion es distinta.
+   */
   function openStartedEpisodeIds(asOf: Date): string[] {
     return store.episodes
       .filter(
         (episode) =>
           episode.deletedAt === null &&
-          episode.endsOn === null &&
-          episode.startsOn.getTime() <= asOf.getTime(),
+          episode.startsOn.getTime() <= asOf.getTime() &&
+          (episode.endsOn === null || episode.endsOn.getTime() > asOf.getTime()),
       )
       .map((episode) => episode.id)
   }

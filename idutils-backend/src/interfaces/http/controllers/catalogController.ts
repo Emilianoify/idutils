@@ -2,7 +2,9 @@ import type { Request, RequestHandler, Response } from 'express'
 import { z } from 'zod'
 import type { ProfessionalSelectorDto } from '../../../application/dto/catalogDto.js'
 import type { Professional } from '../../../domain/entities/professionalEntity.js'
-import { SUCCESS_MESSAGES } from '../../../shared/constants/messages.js'
+import { formatFrequency } from '../../../domain/services/frequencyLabel.js'
+import { ERROR_MESSAGES, SUCCESS_MESSAGES } from '../../../shared/constants/messages.js'
+import { AppError } from '../../../shared/errors/AppError.js'
 import { sendOk } from '../../../shared/helpers/responseHelper.js'
 import type { HttpDependencies } from '../dependencies.js'
 import { idSchema } from '../schemas/commonSchemas.js'
@@ -89,9 +91,27 @@ export function createCatalogController(dependencies: HttpDependencies): {
      */
     frequencies: async (request: Request, response: Response): Promise<void> => {
       const { specialtyId } = bySpecialtySchema.parse(request.query)
+
+      const specialty = await infrastructure.specialties.findById(specialtyId)
+      if (specialty === null) {
+        throw new AppError(404, ERROR_MESSAGES.CATALOG.SPECIALTY_NOT_FOUND)
+      }
+
       const items = await infrastructure.frequencies.listEligibleForSpecialty(specialtyId)
 
-      sendOk(response, SUCCESS_MESSAGES.CATALOG.FREQUENCIES, items)
+      // La etiqueta se arma ACA y no en el cliente, aunque el cliente tenga los
+      // dos datos. `2 semanales` es una sola fila del catalogo y el sustantivo
+      // lo pone la especialidad (D11): si el frontend lo resolviera, esa regla
+      // viviria en dos lugares y el dia que se agregue una unidad nueva van a
+      // quedar diciendo cosas distintas.
+      sendOk(
+        response,
+        SUCCESS_MESSAGES.CATALOG.FREQUENCIES,
+        items.map((frequency) => ({
+          ...frequency,
+          label: formatFrequency(frequency, specialty.serviceUnit),
+        })),
+      )
     },
 
     professionals: async (request: Request, response: Response): Promise<void> => {

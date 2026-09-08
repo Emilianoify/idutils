@@ -1,11 +1,11 @@
 import type { Request, RequestHandler, Response } from 'express'
 import { ClaimAuthorizationUseCase } from '../../../application/useCases/authorization/claimAuthorizationUseCase.js'
 import { CreateAuthorizationUseCase } from '../../../application/useCases/authorization/createAuthorizationUseCase.js'
+import { GetCareServiceTimelineUseCase } from '../../../application/useCases/authorization/getCareServiceTimelineUseCase.js'
 import { CreateCareServiceUseCase } from '../../../application/useCases/careService/createCareServiceUseCase.js'
 import { AssignCareServiceProfessionalUseCase } from '../../../application/useCases/careService/assignCareServiceProfessionalUseCase.js'
 import { EndCareServiceUseCase } from '../../../application/useCases/careService/endCareServiceUseCase.js'
-import { ERROR_MESSAGES, SUCCESS_MESSAGES } from '../../../shared/constants/messages.js'
-import { AppError } from '../../../shared/errors/AppError.js'
+import { SUCCESS_MESSAGES } from '../../../shared/constants/messages.js'
 import { sendCreated, sendOk } from '../../../shared/helpers/responseHelper.js'
 import type { HttpDependencies } from '../dependencies.js'
 import {
@@ -55,6 +55,16 @@ export function createCareServiceController(dependencies: HttpDependencies): {
     infrastructure.clock,
   )
 
+  const timelineUseCase = new GetCareServiceTimelineUseCase(
+    infrastructure.careServices,
+    infrastructure.episodes,
+    infrastructure.authorizations,
+    infrastructure.specialties,
+    infrastructure.professionals,
+    infrastructure.contractingCompanies,
+    infrastructure.clock,
+  )
+
   return {
     create: async (request: Request, response: Response): Promise<void> => {
       const command = createCareServiceSchema.parse(request.body)
@@ -93,12 +103,7 @@ export function createCareServiceController(dependencies: HttpDependencies): {
     listAuthorizations: async (request: Request, response: Response): Promise<void> => {
       const { id } = idParamsSchema.parse(request.params)
 
-      const careService = await infrastructure.careServices.findById(id)
-      if (careService === null) throw new AppError(404, ERROR_MESSAGES.CARE_SERVICE.NOT_FOUND)
-
-      const authorizations = await infrastructure.authorizations.listByCareService(id)
-
-      sendOk(response, SUCCESS_MESSAGES.AUTHORIZATION.LIST, authorizations)
+      sendOk(response, SUCCESS_MESSAGES.AUTHORIZATION.LIST, await timelineUseCase.execute(id))
     },
 
     /**
