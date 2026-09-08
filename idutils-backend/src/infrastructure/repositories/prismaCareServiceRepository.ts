@@ -206,21 +206,52 @@ export function createPrismaCareServiceRepository(context: PrismaContext): ICare
     },
 
     async assignProfessional(id, professionalId, specialtyId, asOf) {
-      const professionalGuard =
-        professionalId === null
-          ? {}
-          : {
-              professional: {
-                is: {
-                  id: professionalId,
-                  active: true,
-                  deletedAt: null,
-                  specialties: { some: { specialtyId, deletedAt: null } },
-                },
-              },
-            }
-
       return context.atomically(async (transaction) => {
+        /**
+         * El profesional que se ASIGNA se revalida aparte, con su propia
+         * lectura bloqueante.
+         *
+         * No puede ir como filtro de la fila: en el `where`, `professional`
+         * describe al profesional que la prestacion YA TIENE, no al que se le
+         * quiere poner. Escrito asi, la unica asignacion que pasaba era la que
+         * no cambiaba nada — asignar a una prestacion sin profesional no
+         * matcheaba ninguna fila y la operacion contestaba 409 siempre.
+         *
+         * Mismo orden de locks que `createGuarded`: profesional y despues su
+         * relacion con la especialidad.
+         */
+        if (professionalId !== null) {
+          const [professional] = await transaction.$queryRaw<CatalogGuardRow[]>`
+            SELECT "active", "deletedAt"
+            FROM "professionals" /* care-service-assign:professional */
+            WHERE "id" = ${professionalId}
+            FOR UPDATE
+          `
+          if (professional === undefined || professional.deletedAt !== null) return null
+          if (!professional.active) return null
+
+          /**
+           * El filtro de vigencia va en el WHERE, no en un `if` posterior.
+           *
+           * La pregunta es "existe un vinculo VIVO", no "que estado tiene la
+           * fila que la base devuelva primero". Escrito con el `deletedAt`
+           * afuera, un `SELECT` sin ORDER BY sobre varias filas del mismo par
+           * dejaria el resultado a criterio del planner. Hoy no puede pasar
+           * —`@@unique([professionalId, specialtyId])` admite una sola fila
+           * fisica y un re-vinculo la actualiza— pero la query no deberia
+           * depender de esa constraint para ser determinista.
+           */
+          const [professionalSpecialty] = await transaction.$queryRaw<RelationshipGuardRow[]>`
+            SELECT "deletedAt"
+            FROM "professional_specialties" /* care-service-assign:professional-specialty */
+            WHERE "professionalId" = ${professionalId}
+              AND "specialtyId" = ${specialtyId}
+              AND "deletedAt" IS NULL
+            FOR UPDATE
+          `
+          if (professionalSpecialty === undefined) return null
+        }
+
         const result = await withDomainErrors(() =>
           transaction.careService.updateMany({
             where: {
@@ -234,7 +265,6 @@ export function createPrismaCareServiceRepository(context: PrismaContext): ICare
                 deletedAt: null,
                 OR: [{ endsOn: null }, { endsOn: { gt: asOf } }],
               },
-              ...professionalGuard,
             },
             data: { professionalId },
           }),

@@ -413,6 +413,86 @@ describe('guarda de escritura de la baja individual', () => {
       ),
     ).toBeNull()
   })
+
+  /**
+   * La asignacion sobre un episodio SIN cierre. Parece que no pertenece a un
+   * archivo de invariantes, pero es lo que un fake en memoria no puede probar:
+   * el doble ignora la guarda del profesional, asi que durante toda su vida el
+   * unico lugar donde este defecto podia aparecer era contra Postgres.
+   */
+  it('asigna un profesional a una prestacion que todavia no tiene ninguno', async () => {
+    const { patientId, affiliationId } = await createPatient({})
+    const episode = await infrastructure.episodes.create({
+      patientId,
+      affiliationId,
+      startsOn: parseDateOnly('2026-01-01'),
+    })
+    const careService = await infrastructure.careServices.create({
+      episodeId: episode.id,
+      specialtyId: catalog.specialtyId,
+      contractingCompanyId: catalog.contractingCompanyId,
+      professionalId: null,
+    })
+
+    const assigned = await infrastructure.careServices.assignProfessional(
+      careService.id,
+      catalog.professionalId,
+      catalog.specialtyId,
+      parseDateOnly('2026-02-10'),
+    )
+
+    expect(assigned?.professionalId).toBe(catalog.professionalId)
+  })
+
+  it('rechaza asignar un profesional que no tiene la especialidad', async () => {
+    const { patientId, affiliationId } = await createPatient({})
+    const episode = await infrastructure.episodes.create({
+      patientId,
+      affiliationId,
+      startsOn: parseDateOnly('2026-01-01'),
+    })
+    const careService = await infrastructure.careServices.create({
+      episodeId: episode.id,
+      specialtyId: catalog.specialtyId,
+      contractingCompanyId: catalog.contractingCompanyId,
+      professionalId: null,
+    })
+
+    await client.professionalSpecialty.deleteMany({
+      where: { professionalId: catalog.professionalId },
+    })
+
+    expect(
+      await infrastructure.careServices.assignProfessional(
+        careService.id,
+        catalog.professionalId,
+        catalog.specialtyId,
+        parseDateOnly('2026-02-10'),
+      ),
+    ).toBeNull()
+  })
+
+  it('la asignacion de profesional usa la misma ventana temporal', async () => {
+    const careServiceId = await withScheduledClose()
+
+    const assigned = await infrastructure.careServices.assignProfessional(
+      careServiceId,
+      catalog.professionalId,
+      catalog.specialtyId,
+      parseDateOnly('2026-02-10'),
+    )
+    expect(assigned?.professionalId).toBe(catalog.professionalId)
+
+    // Cumplido el cierre, la misma escritura deja de estar permitida.
+    expect(
+      await infrastructure.careServices.assignProfessional(
+        careServiceId,
+        null,
+        catalog.specialtyId,
+        parseDateOnly('2026-03-01'),
+      ),
+    ).toBeNull()
+  })
 })
 
 describe('D10 - coherencia del periodo autorizado', () => {
