@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { login } from '@/lib/api/auth'
 import { ApiError } from '@/lib/api/client'
+import { useHydrated } from '@/lib/hooks/useHydrated'
 import { loginSchema } from '@/lib/schemas/login'
 
 interface Failure {
@@ -19,6 +20,7 @@ const LABEL_CLASSES =
 
 export function LoginForm(): React.ReactElement {
   const router = useRouter()
+  const hydrated = useHydrated()
   const [submitting, setSubmitting] = useState(false)
   const [failure, setFailure] = useState<Failure | null>(null)
 
@@ -61,7 +63,29 @@ export function LoginForm(): React.ReactElement {
   }
 
   return (
-    <form className="flex flex-col gap-[19px]" onSubmit={handleSubmit} noValidate>
+    /**
+     * `method="post"` no es decorativo, y no sobra por tener `onSubmit`.
+     *
+     * Entre que el navegador pinta este HTML y que React hidrata, el formulario
+     * ya se puede enviar pero `handleSubmit` todavía no está enganchado. Ahí
+     * manda el envío NATIVO, y un `<form>` sin `method` ni `action` es un GET
+     * contra la URL actual: la contraseña termina en la barra de direcciones,
+     * en el historial del dispositivo, en los logs de cualquier proxy y en el
+     * `Referer` de los pedidos siguientes.
+     *
+     * En localhost el bundle carga tan rápido que la ventana no se nota. Desde
+     * otro dispositivo por wifi, sí.
+     *
+     * Con `method="post"` ese envío prematuro viaja en el cuerpo y nunca en la
+     * URL. El `disabled` de abajo lo evita del todo; esto es la red por si el
+     * JavaScript directamente no carga.
+     */
+    <form
+      className="flex flex-col gap-[19px]"
+      method="post"
+      onSubmit={handleSubmit}
+      noValidate
+    >
       <div className="flex flex-col gap-[7px]">
         <label htmlFor="email" className={LABEL_CLASSES}>
           Correo
@@ -109,9 +133,11 @@ export function LoginForm(): React.ReactElement {
         )}
       </div>
 
+      {/* Deshabilitado hasta que React tome control: apretarlo antes haría el
+          envío nativo, que es el que manda las credenciales por la URL. */}
       <button
         type="submit"
-        disabled={submitting}
+        disabled={submitting || !hydrated}
         className="mt-1.5 cursor-pointer border-0 bg-action px-[18px] py-[13px] text-[14.5px] font-semibold tracking-[0.01em] text-field transition-colors hover:bg-action-bright active:translate-y-px disabled:cursor-progress disabled:opacity-70"
       >
         {submitting ? 'Entrando…' : 'Iniciar sesión'}

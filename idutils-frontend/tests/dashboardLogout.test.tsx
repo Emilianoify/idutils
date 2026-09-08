@@ -20,6 +20,11 @@ vi.mock('@/lib/api/auth', () => ({
 vi.mock('@/lib/api/dashboard', () => ({
   getDashboard: vi.fn(async () => ({
     warningDays: 30,
+    // El resumen trae además la lista de reclamos y el corte por empresa; este
+    // test mira el logout, así que van vacías.
+    claims: [],
+    byCompany: [],
+    workQueues: [],
     counters: {
       activePatients: 1,
       activeCareServices: 2,

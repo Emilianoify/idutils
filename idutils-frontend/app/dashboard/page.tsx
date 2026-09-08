@@ -1,7 +1,10 @@
 'use client'
 
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
+import ClaimsList from '@/components/dashboard/ClaimsList'
+import WorkQueuesList from '@/components/dashboard/WorkQueuesList'
 import { currentUser, logout, type User } from '@/lib/api/auth'
 import { ApiError } from '@/lib/api/client'
 import { getDashboard, type DashboardSummary } from '@/lib/api/dashboard'
@@ -157,14 +160,22 @@ export default function DashboardPage(): React.ReactElement {
         </div>
 
         <div className="flex max-w-[42ch] flex-col items-end gap-2">
-          <button
-            type="button"
-            onClick={() => void signOut()}
-            disabled={signingOut}
-            className="cursor-pointer border-0 bg-transparent p-0 text-[13px] text-light-faint underline-offset-4 hover:text-light hover:underline disabled:cursor-progress disabled:opacity-70"
-          >
-            {signingOut ? 'Cerrando sesión…' : 'Cerrar sesión'}
-          </button>
+          <div className="flex items-center gap-4">
+            <Link
+              href="/patients"
+              className="text-[13px] text-light-faint underline-offset-4 hover:text-light hover:underline"
+            >
+              Pacientes
+            </Link>
+            <button
+              type="button"
+              onClick={() => void signOut()}
+              disabled={signingOut}
+              className="cursor-pointer border-0 bg-transparent p-0 text-[13px] text-light-faint underline-offset-4 hover:text-light hover:underline disabled:cursor-progress disabled:opacity-70"
+            >
+              {signingOut ? 'Cerrando sesión…' : 'Cerrar sesión'}
+            </button>
+          </div>
           {logoutFailure !== null && (
             <p role="alert" className="m-0 text-right text-[12.5px] text-expired">
               {logoutFailure}
@@ -190,6 +201,25 @@ export default function DashboardPage(): React.ReactElement {
           </div>
         ))}
       </div>
+
+      {/* Los contadores dicen CUÁNTO. Esta lista dice A QUIÉN LLAMAR, que es la
+          pregunta que el operador trae puesta cuando abre el sistema. */}
+      <section className="mt-10">
+        <h2 className="m-0 mb-3 text-[11px] uppercase tracking-[0.15em] text-light-faint">
+          A quién hay que reclamarle
+        </h2>
+        <ClaimsList claims={summary.claims} />
+      </section>
+
+      {/* La otra mitad: los que no están activos pero tampoco terminaron. El
+          paciente internado no tiene episodio abierto y no figura en ninguna
+          lista de activos — sin esta sección, desaparece. */}
+      <section className="mt-10">
+        <h2 className="m-0 mb-3 text-[11px] uppercase tracking-[0.15em] text-light-faint">
+          Quién está esperando
+        </h2>
+        <WorkQueuesList items={summary.workQueues} />
+      </section>
     </main>
   )
 }
