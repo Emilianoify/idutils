@@ -32,7 +32,7 @@ import type {
 import type { IHomeCareEpisodeRepository } from '../../src/domain/repositories/IHomeCareEpisodeRepository.js'
 import type { IPatientRepository } from '../../src/domain/repositories/IPatientRepository.js'
 import type { IUnitOfWork, TransactionalRepositories } from '../../src/domain/repositories/IUnitOfWork.js'
-import { episodeIsClosedAt } from '../../src/domain/services/careServiceRules.js'
+import { episodeIsClosedAt } from '../../src/domain/services/episodeTimeline.js'
 
 /** Lo que no hace falta para el caso de uso bajo prueba grita, no miente. */
 function notImplemented(name: string): never {

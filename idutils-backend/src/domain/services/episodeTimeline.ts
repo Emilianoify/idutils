@@ -20,6 +20,25 @@ export interface DateRange {
   to: Date
 }
 
+/**
+ * El episodio esta cerrado A UNA FECHA, no "tiene un cierre cargado".
+ *
+ * El rango es SEMIABIERTO `[startsOn, endsOn)`: el dia que el episodio cierra
+ * el paciente ya no esta en el, que es exactamente lo que declara la constraint
+ * EXCLUDE de la base. Un cierre PROGRAMADO al 7/9 estando a 6/9 es un aviso, no
+ * un hecho consumado: hasta el jueves se le sigue prestando al paciente.
+ *
+ * Vive aca, en la linea temporal del episodio, y no junto a una regla de
+ * prestacion o de estado del paciente: los tres la preguntan, y escrita tres
+ * veces alcanza con que una se desincronice para que la lectura y la escritura
+ * dejen de coincidir. Preguntar `endsOn !== null` era leer el aviso como si ya
+ * hubiera pasado, y dejaba al tablero pidiendo un reclamo cuyas acciones
+ * despues rebotaban con 409.
+ */
+export function episodeIsClosedAt(endsOn: Date | null, asOf: Date): boolean {
+  return endsOn !== null && endsOn.getTime() <= asOf.getTime()
+}
+
 function liveEpisodesSorted(episodes: readonly HomeCareEpisode[]): HomeCareEpisode[] {
   return episodes
     .filter((episode) => episode.deletedAt === null)

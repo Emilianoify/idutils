@@ -10,6 +10,8 @@
  * en vez de confiar en el criterio del operador.
  */
 
+import { episodeIsClosedAt } from './episodeTimeline.js'
+
 export const CareServiceViolation = {
   /** El episodio esta cerrado o dado de baja: no se le cuelgan prestaciones nuevas. */
   EPISODIO_CERRADO: 'EPISODIO_CERRADO',
@@ -80,22 +82,6 @@ export const CareServiceMutationViolation = {
 
 export type CareServiceMutationViolation =
   (typeof CareServiceMutationViolation)[keyof typeof CareServiceMutationViolation]
-
-/**
- * El episodio esta cerrado A UNA FECHA, no "tiene un cierre cargado".
- *
- * El rango es SEMIABIERTO `[startsOn, endsOn)`, el mismo que usan
- * `currentEpisodeAt` y el tablero. Un cierre PROGRAMADO al 7/9 estando a 6/9 es
- * un aviso, no un hecho consumado: hasta el jueves se le sigue prestando al
- * paciente, y hasta el jueves sus prestaciones se pueden tocar.
- *
- * Preguntar `endsOn !== null` era leer el aviso como si ya hubiera pasado, y
- * dejaba al sistema pidiendo por el tablero un reclamo cuyas acciones despues
- * rebotaban con 409.
- */
-export function episodeIsClosedAt(endsOn: Date | null, asOf: Date): boolean {
-  return endsOn !== null && endsOn.getTime() <= asOf.getTime()
-}
 
 export interface CareServiceMutationState {
   serviceEndedOn: Date | null

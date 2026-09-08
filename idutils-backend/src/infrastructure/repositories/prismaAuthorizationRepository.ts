@@ -3,7 +3,7 @@ import {
   type GuardedAuthorizationCreateResult,
   type IAuthorizationRepository,
 } from '../../domain/repositories/IAuthorizationRepository.js'
-import { episodeIsClosedAt } from '../../domain/services/careServiceRules.js'
+import { episodeIsClosedAt } from '../../domain/services/episodeTimeline.js'
 import type { FrequencyUnit } from '../../generated/prisma/enums.js'
 import type { PrismaContext } from '../database/prismaContext.js'
 import { withDomainErrors } from '../database/prismaErrors.js'

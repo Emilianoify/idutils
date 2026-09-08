@@ -2,6 +2,7 @@ import type { CloseReason } from '../../generated/prisma/enums.js'
 import type { HomeCareEpisode } from '../entities/homeCareEpisodeEntity.js'
 import { PatientStatus } from '../enums/patientStatus.js'
 import { WorkQueue } from '../enums/workQueue.js'
+import { episodeIsClosedAt } from './episodeTimeline.js'
 
 /**
  * El estado del paciente, derivado de sus episodios (D9).
@@ -63,8 +64,7 @@ export function currentEpisodeAt(
   return (
     liveEpisodes(episodes).find(
       (episode) =>
-        episode.startsOn.getTime() <= at &&
-        (episode.endsOn === null || at < episode.endsOn.getTime()),
+        episode.startsOn.getTime() <= at && !episodeIsClosedAt(episode.endsOn, date),
     ) ?? null
   )
 }
@@ -80,10 +80,8 @@ export function lastClosedEpisodeAt(
   episodes: readonly HomeCareEpisode[],
   date: Date,
 ): HomeCareEpisode | null {
-  const at = date.getTime()
-
-  const closed = liveEpisodes(episodes).filter(
-    (episode) => episode.endsOn !== null && episode.endsOn.getTime() <= at,
+  const closed = liveEpisodes(episodes).filter((episode) =>
+    episodeIsClosedAt(episode.endsOn, date),
   )
 
   if (closed.length === 0) return null
