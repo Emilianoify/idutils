@@ -58,18 +58,24 @@ export interface ICareServiceRepository {
   createGuarded(input: GuardedCareServiceCreate): Promise<GuardedCareServiceCreateResult>
 
   /**
-   * Asigna o desasigna solo si la prestación y su episodio siguen mutables.
-   * Para una asignación también vuelve a comprobar en la escritura que el
-   * profesional siga activo y habilitado para la especialidad.
+   * Asigna o desasigna solo si la prestación y su episodio siguen mutables
+   * A LA FECHA `asOf`. Para una asignación también vuelve a comprobar en la
+   * escritura que el profesional siga activo y habilitado para la especialidad.
+   *
+   * `asOf` baja desde el caso de uso en vez de salir de un reloj inyectado
+   * acá: un repositorio que supiera qué día es podría contestar distinto que
+   * la regla de dominio que lo llamó, y esa desalineación entre la lectura y
+   * la escritura es justo lo que este parámetro viene a cerrar.
    */
   assignProfessional(
     id: string,
     professionalId: string | null,
     specialtyId: string,
+    asOf: Date,
   ): Promise<CareService | null>
 
-  /** Baja individual si la prestación y su episodio siguen mutables. */
-  end(id: string, endedOn: Date): Promise<CareService | null>
+  /** Baja individual si la prestación y su episodio siguen mutables a `asOf`. */
+  end(id: string, endedOn: Date, asOf: Date): Promise<CareService | null>
 
   /**
    * Las obras sociales con las que la empresa tiene convenio (D2).

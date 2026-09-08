@@ -3,6 +3,7 @@ import {
   type GuardedAuthorizationCreateResult,
   type IAuthorizationRepository,
 } from '../../domain/repositories/IAuthorizationRepository.js'
+import { episodeIsClosedAt } from '../../domain/services/careServiceRules.js'
 import type { FrequencyUnit } from '../../generated/prisma/enums.js'
 import type { PrismaContext } from '../database/prismaContext.js'
 import { withDomainErrors } from '../database/prismaErrors.js'
@@ -90,7 +91,7 @@ export function createPrismaAuthorizationRepository(
         if (episode === undefined) {
           return { authorization: null, failure: AuthorizationCreateFailure.EPISODE_NOT_FOUND }
         }
-        if (episode.endsOn !== null || episode.deletedAt !== null) {
+        if (episodeIsClosedAt(episode.endsOn, input.asOf) || episode.deletedAt !== null) {
           return { authorization: null, failure: AuthorizationCreateFailure.EPISODE_CLOSED }
         }
 

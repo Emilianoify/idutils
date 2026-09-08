@@ -205,7 +205,7 @@ export function createPrismaCareServiceRepository(context: PrismaContext): ICare
       })
     },
 
-    async assignProfessional(id, professionalId, specialtyId) {
+    async assignProfessional(id, professionalId, specialtyId, asOf) {
       const professionalGuard =
         professionalId === null
           ? {}
@@ -228,7 +228,12 @@ export function createPrismaCareServiceRepository(context: PrismaContext): ICare
               specialtyId,
               endedOn: null,
               deletedAt: null,
-              episode: { endsOn: null, deletedAt: null },
+              // Mismo rango semiabierto que la lectura: un cierre PROGRAMADO
+              // no bloquea, un cierre ya cumplido si.
+              episode: {
+                deletedAt: null,
+                OR: [{ endsOn: null }, { endsOn: { gt: asOf } }],
+              },
               ...professionalGuard,
             },
             data: { professionalId },
@@ -241,9 +246,9 @@ export function createPrismaCareServiceRepository(context: PrismaContext): ICare
       })
     },
 
-    async end(id, endedOn) {
-      // Baja individual: el episodio sigue abierto y las demas prestaciones
-      // siguen corriendo.
+    async end(id, endedOn, asOf) {
+      // Baja individual: el episodio sigue corriendo y las demas prestaciones
+      // siguen corriendo con el.
       return context.atomically(async (transaction) => {
         const result = await withDomainErrors(() =>
           transaction.careService.updateMany({
@@ -251,7 +256,27 @@ export function createPrismaCareServiceRepository(context: PrismaContext): ICare
               id,
               endedOn: null,
               deletedAt: null,
-              episode: { startsOn: { lte: endedOn }, endsOn: null, deletedAt: null },
+              /**
+               * Dos preguntas distintas sobre el mismo episodio, y las dos
+               * hacen falta:
+               *
+               * 1. Sigue corriendo HOY (`asOf`), asi un cierre PROGRAMADO no
+               *    bloquea la baja pero uno ya cumplido si.
+               * 2. `endedOn` cae adentro de su linea temporal.
+               *
+               * La segunda dejo de ser gratis cuando la primera acepto un
+               * cierre a futuro: antes `endsOn` era null por construccion. Sin
+               * ella, un cierre que entre entre la lectura y la escritura
+               * dejaria pasar una baja POSTERIOR al fin del episodio.
+               */
+              episode: {
+                startsOn: { lte: endedOn },
+                deletedAt: null,
+                AND: [
+                  { OR: [{ endsOn: null }, { endsOn: { gt: asOf } }] },
+                  { OR: [{ endsOn: null }, { endsOn: { gte: endedOn } }] },
+                ],
+              },
             },
             data: { endedOn },
           }),

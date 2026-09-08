@@ -97,6 +97,7 @@ function openEpisode() {
     infrastructure.unitOfWork,
     infrastructure.professionals,
     infrastructure.frequencies,
+    infrastructure.clock,
   ).execute({
     patientId,
     affiliationId,

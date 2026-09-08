@@ -52,6 +52,7 @@ function createAuthorization() {
     infrastructure.authorizations,
     infrastructure.careServices,
     infrastructure.frequencies,
+    infrastructure.clock,
   ).execute({
     careServiceId,
     frequencyId: catalog.frequencyId,
@@ -139,6 +140,7 @@ describe('guarded authorization creation', () => {
       validFrom: new Date('2026-03-01T00:00:00.000Z'),
       validUntil: new Date('2026-02-28T00:00:00.000Z'),
       notes: '',
+      asOf: infrastructure.clock.today(),
     })
 
     expect(result).toMatchObject({ authorization: null, failure: 'INVALID_PERIOD' })

@@ -32,6 +32,7 @@ import type {
 import type { IHomeCareEpisodeRepository } from '../../src/domain/repositories/IHomeCareEpisodeRepository.js'
 import type { IPatientRepository } from '../../src/domain/repositories/IPatientRepository.js'
 import type { IUnitOfWork, TransactionalRepositories } from '../../src/domain/repositories/IUnitOfWork.js'
+import { episodeIsClosedAt } from '../../src/domain/services/careServiceRules.js'
 
 /** Lo que no hace falta para el caso de uso bajo prueba grita, no miente. */
 function notImplemented(name: string): never {
@@ -275,6 +276,23 @@ export function createEpisodeRepository(store: InMemoryStore): IHomeCareEpisodeR
   }
 }
 
+/**
+ * Espeja la guarda de escritura del adaptador Prisma: el episodio bloquea una
+ * mutacion solo si su cierre YA SE CUMPLIO a `asOf`. Sin esto el doble en
+ * memoria seria mas permisivo que la base, y los tests dejarian pasar lo que
+ * en produccion devuelve null.
+ */
+function episodeIsClosedForService(
+  store: InMemoryStore,
+  careService: CareService,
+  asOf: Date,
+): boolean {
+  const episode = store.episodes.find((candidate) => candidate.id === careService.episodeId)
+  if (episode === undefined) return true
+
+  return episode.deletedAt !== null || episodeIsClosedAt(episode.endsOn, asOf)
+}
+
 export function createCareServiceRepository(store: InMemoryStore): ICareServiceRepository {
   const live = (): CareService[] => store.careServices.filter((row) => row.deletedAt === null)
 
@@ -302,19 +320,21 @@ export function createCareServiceRepository(store: InMemoryStore): ICareServiceR
       const careService = await this.create(input.careService)
       return { careService, failure: null }
     },
-    async assignProfessional(id, professionalId) {
+    async assignProfessional(id, professionalId, _specialtyId, asOf) {
       const index = store.careServices.findIndex((careService) => careService.id === id)
       const found = store.careServices[index]
       if (found === undefined || found.deletedAt !== null || found.endedOn !== null) return null
+      if (episodeIsClosedForService(store, found, asOf)) return null
 
       const updated: CareService = { ...found, professionalId }
       store.careServices[index] = updated
       return updated
     },
-    async end(id, endedOn) {
+    async end(id, endedOn, asOf) {
       const index = store.careServices.findIndex((careService) => careService.id === id)
       const found = store.careServices[index]
       if (found === undefined || found.deletedAt !== null || found.endedOn !== null) return null
+      if (episodeIsClosedForService(store, found, asOf)) return null
 
       const updated: CareService = { ...found, endedOn }
       store.careServices[index] = updated
@@ -363,7 +383,7 @@ export function createAuthorizationRepository(store: InMemoryStore): IAuthorizat
       if (episode === undefined) {
         return { authorization: null, failure: AuthorizationCreateFailure.EPISODE_NOT_FOUND }
       }
-      if (episode.endsOn !== null || episode.deletedAt !== null) {
+      if (episodeIsClosedAt(episode.endsOn, input.asOf) || episode.deletedAt !== null) {
         return { authorization: null, failure: AuthorizationCreateFailure.EPISODE_CLOSED }
       }
 

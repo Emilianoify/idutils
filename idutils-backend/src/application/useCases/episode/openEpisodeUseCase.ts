@@ -2,6 +2,7 @@ import type {
   IFrequencyRepository,
   IProfessionalRepository,
 } from '../../../domain/repositories/ICatalogRepository.js'
+import type { IClock } from '../../../domain/repositories/IClock.js'
 import type { IUnitOfWork, TransactionalRepositories } from '../../../domain/repositories/IUnitOfWork.js'
 import { validateAuthorizationDraft } from '../../../domain/services/authorizationRules.js'
 import { validateCareServiceDraft } from '../../../domain/services/careServiceRules.js'
@@ -28,6 +29,7 @@ export class OpenEpisodeUseCase {
     private readonly unitOfWork: IUnitOfWork,
     private readonly professionalRepository: IProfessionalRepository,
     private readonly frequencyRepository: IFrequencyRepository,
+    private readonly clock: IClock,
   ) {}
 
   async execute(command: OpenEpisodeCommand): Promise<{ episodeId: string }> {
@@ -158,6 +160,10 @@ export class OpenEpisodeUseCase {
       validFrom: item.authorization.validFrom,
       validUntil: item.authorization.validUntil,
       notes: item.authorization.notes,
+      // El episodio se acaba de crear sin cierre, asi que la guarda pasa
+      // siempre. Se manda el "hoy" real igual: la fecha es del negocio, no un
+      // relleno para satisfacer una firma.
+      asOf: this.clock.today(),
     })
     if (authorization.failure !== null) {
       throwAuthorizationCreateFailure(authorization.failure)

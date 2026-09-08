@@ -25,6 +25,13 @@ export interface GuardedAuthorizationCreate {
   validFrom: Date
   validUntil: Date
   notes: string
+  /**
+   * La fecha contra la que se decide si el episodio sigue corriendo.
+   *
+   * Un episodio con cierre PROGRAMADO todavia acepta una renovacion: es
+   * exactamente el caso que el tablero muestra como reclamo pendiente.
+   */
+  asOf: Date
 }
 
 export type GuardedAuthorizationCreateResult =

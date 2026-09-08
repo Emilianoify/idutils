@@ -3,12 +3,16 @@ import { CreateAuthorizationUseCase } from '../../src/application/useCases/autho
 import { ERROR_MESSAGES } from '../../src/shared/constants/messages.js'
 import { d } from '../helpers/factories.js'
 import {
+  FixedClock,
   InMemoryStore,
   createAuthorizationRepository,
   createCareServiceRepository,
   createFrequencyRepository,
   seedCatalog,
 } from '../helpers/inMemory.js'
+
+/** Bien dentro del episodio de las fixtures, y fijo: el reloj real no decide tests. */
+const TODAY = d('2026-08-15')
 
 describe('CreateAuthorizationUseCase', () => {
   let store: InMemoryStore
@@ -41,11 +45,12 @@ describe('CreateAuthorizationUseCase', () => {
     careServiceId = careService.id
   })
 
-  function useCase(): CreateAuthorizationUseCase {
+  function useCase(today: Date = TODAY): CreateAuthorizationUseCase {
     return new CreateAuthorizationUseCase(
       createAuthorizationRepository(store),
       createCareServiceRepository(store),
       createFrequencyRepository(store),
+      new FixedClock(today),
     )
   }
 
@@ -73,13 +78,27 @@ describe('CreateAuthorizationUseCase', () => {
   it('rejects an authorization when the episode was closed after readable prevalidation', async () => {
     const episode = store.episodes[0]
     if (episode === undefined) throw new Error('expected seeded episode')
-    episode.endsOn = d('2026-08-31')
+    // A close already in effect at `asOf`, not merely scheduled.
+    episode.endsOn = d('2026-08-10')
 
     await expect(useCase().execute(command())).rejects.toMatchObject({
       statusCode: 409,
       message: ERROR_MESSAGES.AUTHORIZATION.PRESTACION_DADA_DE_BAJA,
     })
     expect(store.authorizations).toHaveLength(0)
+  })
+
+  it('accepts a renewal while the close is still only scheduled', async () => {
+    // The board lists this episode as active because it still covers today, and
+    // asks for the renewal. Rejecting the write here is the system demanding
+    // work it then refuses to accept.
+    const episode = store.episodes[0]
+    if (episode === undefined) throw new Error('expected seeded episode')
+    episode.endsOn = d('2026-08-31')
+
+    const result = await useCase().execute(command())
+
+    expect(result.authorizationId).toBe(store.authorizations[0]?.id)
   })
 
   it('preserves the domain message for an invalid period during readable prevalidation', async () => {

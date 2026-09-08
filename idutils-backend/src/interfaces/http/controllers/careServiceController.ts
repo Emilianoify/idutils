@@ -38,16 +38,19 @@ export function createCareServiceController(dependencies: HttpDependencies): {
     infrastructure.careServices,
     infrastructure.episodes,
     infrastructure.professionals,
+    infrastructure.clock,
   )
   const endUseCase = new EndCareServiceUseCase(
     infrastructure.careServices,
     infrastructure.episodes,
+    infrastructure.clock,
   )
 
   const createAuthorizationUseCase = new CreateAuthorizationUseCase(
     infrastructure.authorizations,
     infrastructure.careServices,
     infrastructure.frequencies,
+    infrastructure.clock,
   )
 
   const claimUseCase = new ClaimAuthorizationUseCase(

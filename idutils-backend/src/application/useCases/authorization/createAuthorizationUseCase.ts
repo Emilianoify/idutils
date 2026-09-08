@@ -1,6 +1,7 @@
 import type { IAuthorizationRepository } from '../../../domain/repositories/IAuthorizationRepository.js'
 import type { ICareServiceRepository } from '../../../domain/repositories/ICareServiceRepository.js'
 import type { IFrequencyRepository } from '../../../domain/repositories/ICatalogRepository.js'
+import type { IClock } from '../../../domain/repositories/IClock.js'
 import { validateAuthorizationDraft } from '../../../domain/services/authorizationRules.js'
 import { ERROR_MESSAGES } from '../../../shared/constants/messages.js'
 import { AppError } from '../../../shared/errors/AppError.js'
@@ -33,6 +34,7 @@ export class CreateAuthorizationUseCase {
     private readonly authorizationRepository: IAuthorizationRepository,
     private readonly careServiceRepository: ICareServiceRepository,
     private readonly frequencyRepository: IFrequencyRepository,
+    private readonly clock: IClock,
   ) {}
 
   async execute(command: CreateAuthorizationCommand): Promise<{ authorizationId: string }> {
@@ -68,6 +70,9 @@ export class CreateAuthorizationUseCase {
       validFrom: command.validFrom,
       validUntil: command.validUntil,
       notes: command.notes,
+      // Un episodio con cierre PROGRAMADO sigue aceptando la renovacion: es el
+      // mismo criterio con el que el tablero lo listo como reclamo pendiente.
+      asOf: this.clock.today(),
     })
     if (created.failure !== null) throwAuthorizationCreateFailure(created.failure)
 

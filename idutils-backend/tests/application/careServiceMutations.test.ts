@@ -12,12 +12,16 @@ import {
   createEpisodeRepository,
   createProfessionalRepository,
   createSpecialtyRepository,
+  FixedClock,
   InMemoryStore,
 } from '../helpers/inMemory.js'
 
 const EPOCH = d('2026-01-01')
 
-function harness() {
+/** El "hoy" por defecto: bien despues del episodio, para no depender del reloj real. */
+const TODAY = d('2026-03-01')
+
+function harness(today: Date = TODAY) {
   const store = new InMemoryStore()
   store.affiliations.push({
     id: 'affiliation',
@@ -87,6 +91,7 @@ function harness() {
   const careServices = createCareServiceRepository(store)
   const episodes = createEpisodeRepository(store)
   const professionals = createProfessionalRepository(store)
+  const clock = new FixedClock(today)
 
   return {
     store,
@@ -98,8 +103,13 @@ function harness() {
       createContractingCompanyRepository(store),
       professionals,
     ),
-    assign: new AssignCareServiceProfessionalUseCase(careServices, episodes, professionals),
-    end: new EndCareServiceUseCase(careServices, episodes),
+    assign: new AssignCareServiceProfessionalUseCase(
+      careServices,
+      episodes,
+      professionals,
+      clock,
+    ),
+    end: new EndCareServiceUseCase(careServices, episodes, clock),
   }
 }
 
@@ -216,6 +226,20 @@ describe('AssignCareServiceProfessionalUseCase', () => {
       message: ERROR_MESSAGES.CARE_SERVICE.EPISODIO_CERRADO,
     })
   })
+
+  it('un cierre PROGRAMADO deja seguir asignando hasta ese día', async () => {
+    // El tablero muestra este episodio como activo porque cubre la fecha. Si
+    // la escritura lo tratara como cerrado, el sistema estaría ofreciendo un
+    // trabajo que después rechaza.
+    const setup = harness(d('2026-02-19'))
+    const careServiceId = await createService(setup)
+    const episode = setup.store.episodes[0]
+    if (episode !== undefined) episode.endsOn = d('2026-02-20')
+
+    const updated = await setup.assign.execute(careServiceId, null)
+
+    expect(updated.professionalId).toBeNull()
+  })
 })
 
 describe('EndCareServiceUseCase', () => {
@@ -238,6 +262,17 @@ describe('EndCareServiceUseCase', () => {
       message: ERROR_MESSAGES.CARE_SERVICE.EPISODIO_CERRADO,
       details: expect.arrayContaining([ERROR_MESSAGES.CARE_SERVICE.ENDS_AFTER_EPISODE_END]),
     })
+  })
+
+  it('un cierre PROGRAMADO deja dar de baja una prestación adentro del episodio', async () => {
+    const setup = harness(d('2026-02-19'))
+    const careServiceId = await createService(setup)
+    const episode = setup.store.episodes[0]
+    if (episode !== undefined) episode.endsOn = d('2026-02-20')
+
+    const updated = await setup.end.execute(careServiceId, d('2026-02-19'))
+
+    expect(updated.endedOn).toEqual(d('2026-02-19'))
   })
 
   it('rechaza una segunda baja', async () => {

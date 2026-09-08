@@ -85,12 +85,46 @@ describe('validateCareServiceEnd', () => {
       episodeEndsOn: d('2026-02-20'),
       episodeDeletedAt: null,
       endedOn: d('2026-02-21'),
+      asOf: d('2026-03-01'),
     })
 
     expect(violations).toEqual([
       CareServiceMutationViolation.EPISODIO_CERRADO,
       CareServiceMutationViolation.ENDS_AFTER_EPISODE_END,
     ])
+  })
+
+  it('un cierre PROGRAMADO no bloquea la baja: hasta ese día se sigue prestando', () => {
+    // Cierre cargado para el 20/2 y hoy es 19/2. El episodio todavía corre, y
+    // el operador tiene que poder dar de baja una prestación adentro de él.
+    const violations = validateCareServiceEnd({
+      serviceEndedOn: null,
+      serviceDeletedAt: null,
+      episodeStartsOn: d('2026-02-01'),
+      episodeEndsOn: d('2026-02-20'),
+      episodeDeletedAt: null,
+      endedOn: d('2026-02-19'),
+      asOf: d('2026-02-19'),
+    })
+
+    expect(violations).toEqual([])
+  })
+
+  it('el día del cierre el episodio ya está cerrado: el rango es semiabierto', () => {
+    // Mismo criterio que `currentEpisodeAt` y que la constraint EXCLUDE de la
+    // base: `[startsOn, endsOn)`. Si acá fuera cerrado y allá semiabierto, un
+    // reingreso el mismo día pasaría el dominio y explotaría en el INSERT.
+    const violations = validateCareServiceEnd({
+      serviceEndedOn: null,
+      serviceDeletedAt: null,
+      episodeStartsOn: d('2026-02-01'),
+      episodeEndsOn: d('2026-02-20'),
+      episodeDeletedAt: null,
+      endedOn: d('2026-02-20'),
+      asOf: d('2026-02-20'),
+    })
+
+    expect(violations).toEqual([CareServiceMutationViolation.EPISODIO_CERRADO])
   })
 })
 

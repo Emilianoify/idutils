@@ -328,7 +328,11 @@ describe('D7 - unicidad de la prestacion entre las activas', () => {
       professionalId: null,
     })
 
-    await infrastructure.careServices.end(careService.id, parseDateOnly('2026-03-01'))
+    await infrastructure.careServices.end(
+      careService.id,
+      parseDateOnly('2026-03-01'),
+      infrastructure.clock.today(),
+    )
 
     const reloaded = await infrastructure.careServices.create({
       episodeId: episode.id,
@@ -339,6 +343,75 @@ describe('D7 - unicidad de la prestacion entre las activas', () => {
 
     expect(reloaded.endedOn).toBeNull()
     expect(await client.careService.count()).toBe(2)
+  })
+})
+
+describe('guarda de escritura de la baja individual', () => {
+  /**
+   * Lo que un fake en memoria NO puede probar: que Prisma traduzca el `AND`
+   * de dos `OR` a la misma ventana temporal que declara la regla. El doble en
+   * memoria reimplementa el predicado en TypeScript; aca corre el SQL.
+   */
+  async function withScheduledClose(): Promise<string> {
+    const { patientId, affiliationId } = await createPatient({})
+
+    const episode = await infrastructure.episodes.create({
+      patientId,
+      affiliationId,
+      startsOn: parseDateOnly('2026-01-01'),
+    })
+
+    const careService = await infrastructure.careServices.create({
+      episodeId: episode.id,
+      specialtyId: catalog.specialtyId,
+      contractingCompanyId: catalog.contractingCompanyId,
+      professionalId: null,
+    })
+
+    // Cierre CARGADO para el 1/3: avisado, todavia no cumplido.
+    await infrastructure.episodes.close(episode.id, {
+      endsOn: parseDateOnly('2026-03-01'),
+      closeReason: CloseReason.ALTA_MEDICA,
+    })
+
+    return careService.id
+  }
+
+  it('deja dar de baja mientras el cierre es solo PROGRAMADO', async () => {
+    const careServiceId = await withScheduledClose()
+
+    const updated = await infrastructure.careServices.end(
+      careServiceId,
+      parseDateOnly('2026-02-10'),
+      parseDateOnly('2026-02-10'),
+    )
+
+    expect(updated?.endedOn).toEqual(parseDateOnly('2026-02-10'))
+  })
+
+  it('rechaza la baja cuando el cierre ya se cumplio', async () => {
+    const careServiceId = await withScheduledClose()
+
+    // El rango es semiabierto: el dia del cierre el episodio ya esta cerrado.
+    expect(
+      await infrastructure.careServices.end(
+        careServiceId,
+        parseDateOnly('2026-02-10'),
+        parseDateOnly('2026-03-01'),
+      ),
+    ).toBeNull()
+  })
+
+  it('rechaza una baja POSTERIOR al cierre programado', async () => {
+    const careServiceId = await withScheduledClose()
+
+    expect(
+      await infrastructure.careServices.end(
+        careServiceId,
+        parseDateOnly('2026-03-15'),
+        parseDateOnly('2026-02-10'),
+      ),
+    ).toBeNull()
   })
 })
 

@@ -1,3 +1,4 @@
+import type { IClock } from '../../../domain/repositories/IClock.js'
 import type { ICareServiceRepository } from '../../../domain/repositories/ICareServiceRepository.js'
 import type { IHomeCareEpisodeRepository } from '../../../domain/repositories/IHomeCareEpisodeRepository.js'
 import type { IProfessionalRepository } from '../../../domain/repositories/ICatalogRepository.js'
@@ -11,9 +12,14 @@ export class AssignCareServiceProfessionalUseCase {
     private readonly careServiceRepository: ICareServiceRepository,
     private readonly episodeRepository: IHomeCareEpisodeRepository,
     private readonly professionalRepository: IProfessionalRepository,
+    private readonly clock: IClock,
   ) {}
 
   async execute(careServiceId: string, professionalId: string | null) {
+    // Un solo `asOf` para la regla y para la guarda de escritura: si cada una
+    // preguntara la fecha por su cuenta podrian discrepar.
+    const asOf = this.clock.today()
+
     const careService = await this.careServiceRepository.findById(careServiceId)
     if (careService === null) throw new AppError(404, ERROR_MESSAGES.CARE_SERVICE.NOT_FOUND)
 
@@ -26,6 +32,7 @@ export class AssignCareServiceProfessionalUseCase {
         serviceDeletedAt: careService.deletedAt,
         episodeEndsOn: episode.endsOn,
         episodeDeletedAt: episode.deletedAt,
+        asOf,
       }),
       ERROR_MESSAGES.CARE_SERVICE,
     )
@@ -49,6 +56,7 @@ export class AssignCareServiceProfessionalUseCase {
       careService.id,
       professionalId,
       careService.specialtyId,
+      asOf,
     )
     if (updated === null) {
       throw new AppError(409, ERROR_MESSAGES.CARE_SERVICE.NOT_MUTABLE)

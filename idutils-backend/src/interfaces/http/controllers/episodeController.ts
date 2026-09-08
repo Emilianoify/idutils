@@ -20,6 +20,7 @@ export function createEpisodeController(dependencies: HttpDependencies): {
     infrastructure.unitOfWork,
     infrastructure.professionals,
     infrastructure.frequencies,
+    infrastructure.clock,
   )
 
   const closeUseCase = new CloseEpisodeUseCase(infrastructure.episodes)

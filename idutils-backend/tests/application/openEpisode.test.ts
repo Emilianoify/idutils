@@ -14,6 +14,7 @@ import { ERROR_MESSAGES } from '../../src/shared/constants/messages.js'
 import { AppError } from '../../src/shared/errors/AppError.js'
 import { d } from '../helpers/factories.js'
 import {
+  FixedClock,
   InMemoryStore,
   InMemoryUnitOfWork,
   createEpisodeRepository,
@@ -87,6 +88,7 @@ describe('OpenEpisodeUseCase', () => {
       repositories,
       createProfessionalRepository(store),
       createFrequencyRepository(store),
+      new FixedClock(d('2026-08-15')),
     )
 
     await repositories.run(async (repos) => {
@@ -298,6 +300,7 @@ describe('OpenEpisodeUseCase', () => {
         guardedUnitOfWork,
         createProfessionalRepository(store),
         createFrequencyRepository(store),
+        new FixedClock(d('2026-08-15')),
       )
 
       await expect(
