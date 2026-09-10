@@ -8,7 +8,8 @@ import directo, solo HTTP.
 
 > El frontend actual vive en `app/`, `components/`, `config/` y `lib/` en la
 > raíz. Las secciones `[OBJETIVO]` describen una posible estructura futura y no
-> se importan sin verificar el código real.
+> se importan sin verificar el código real. La lista completa está en
+> «Migraciones pendientes», al final.
 
 ---
 
@@ -21,11 +22,13 @@ import directo, solo HTTP.
 ```
 
 Este archivo describe el código; no lo gobierna. Si un prompt de módulo o este
-CLAUDE.md contradicen lo que hay en `src/`, **gana el código**: avisá del
-desajuste y arreglá el documento, no fuerces el código al molde viejo.
+CLAUDE.md contradicen lo que hay en `app/`, `components/`, `config/` o `lib/`,
+**gana el código**: avisá del desajuste y arreglá el documento, no fuerces el
+código al molde viejo.
 
 **Única excepción — las secciones marcadas `[OBJETIVO]`.** Ahí el documento
-describe adónde va el proyecto, no dónde está. Nunca asumas que existe.
+describe adónde va el proyecto, no dónde está. Nunca asumas que existe. La
+lista completa está en «Migraciones pendientes», al final.
 
 ---
 
@@ -34,16 +37,16 @@ describe adónde va el proyecto, no dónde está. Nunca asumas que existe.
 | Capa            | Tecnología                            | Versión                    |
 | --------------- | ------------------------------------- | -------------------------- |
 | Framework       | Next.js (App Router)                  | 16+                        |
-| Lenguaje        | TypeScript                            | 7+ strict                  |
+| Lenguaje        | TypeScript                            | 6.0+ strict                |
 | UI              | React                                 | 19+                        |
 | Estilos         | Tailwind CSS                          | v4                         |
-| Componentes     | shadcn/ui                             | latest                     |
+| Componentes     | shadcn/ui                             | controles armados a mano con Tailwind hoy → **[OBJETIVO]** |
 | HTTP client     | Fetch centralizado                    | nativo                     |
-| Estado global   | Zustand                               | v5                         |
-| Formularios     | react-hook-form + @hookform/resolvers | latest                     |
+| Estado global   | Zustand                               | `useState` por página hoy → **[OBJETIVO]** |
+| Formularios     | react-hook-form + @hookform/resolvers | `FormData` nativo + parseo con Zod hoy → **[OBJETIVO]** |
 | Validación      | Zod                                   | v4                         |
-| Animación       | framer-motion                         | latest                     |
-| Toasts          | sonner                                | latest                     |
+| Animación       | framer-motion                         | sin animaciones de transición hoy → **[OBJETIVO]** |
+| Toasts          | sonner                                | errores inline con `role="alert"` hoy → **[OBJETIVO]** |
 | Package manager | pnpm                                  | exclusivo                  |
 | Deploy          | Docker + Nginx                        | mismo host y dominio registrable que el backend (`idutils.com.ar`) |
 
@@ -59,22 +62,21 @@ describe adónde va el proyecto, no dónde está. Nunca asumas que existe.
 ❌ NO llamadas de red fuera de lib/api/client.ts
 ❌ NO lógica de negocio en componentes — solo en stores o lib/
 ❌ NO hardcodear — todo tiene su lugar
-❌ NO hardcodear la URL del backend — solo desde config/env.ts
-❌ NO hardcodear mensajes de UI — solo desde lib/messages.ts
+❌ NO hardcodear la URL del backend — solo desde config/apiUrl.ts
 ❌ NO hardcodear listas de datos de negocio — si existe en el backend, se fetchea
 ❌ NO inventar valores de enum — los define el backend
 ❌ NO comparar enums contra strings — siempre el miembro del enum
 ❌ NO tipar contra la entidad de dominio del backend — solo contra el DTO real
 ❌ NO usar npm ni yarn — solo pnpm
-❌ NO imports relativos entre carpetas de src/ — solo el alias @/
+❌ NO imports relativos entre carpetas del proyecto — solo el alias @/
 ❌ NO extensión .js en los imports — este repo es bundler, no ESM de Node
 ❌ NO archivos kebab-case — camelCase/PascalCase (excepción: page.tsx, layout.tsx)
 ❌ NO commits — el desarrollador revisa y commitea
 ❌ NO instalar dependencias sin consultar
 ❌ NO fetch directo fuera del cliente centralizado
 ❌ NO acceder a cookies desde JavaScript — son httpOnly, las maneja el browser
-❌ NO schemas Zod inline — cada schema vive en src/schemas/<dominio>Schema.ts
-❌ NO z.nativeEnum() — deprecado en Zod 4, se usa z.enum() con el enum directo
+❌ NO schemas Zod inline — cada schema vive en lib/schemas/<dominio>.ts
+❌ NO z.nativeEnum() — deprecado en Zod 4, se usa z.enum() con el objeto directo
 ❌ NO derivar en el cliente lo que el backend ya deriva (estado, bandeja,
    cobertura) — llega calculado en el DTO
 ```
@@ -84,44 +86,49 @@ describe adónde va el proyecto, no dónde está. Nunca asumas que existe.
 ## Estructura de carpetas
 
 ```
-proxy.ts               (raíz, NO src/) protección de rutas en Edge Runtime
-src/
-  app/
-    (public)/login/
-    (protected)/dashboard/ patients/ ...
-  components/
-    <dominio>/         PatientsTable.tsx, <Dominio>Hydrator.tsx
-    ui/                shadcn/ui
-  store/               use<Dominio>Store.ts
-  schemas/             <dominio>Schema.ts
-  types/
-    api.ts             SOLO los envoltorios: ApiResponse<T>, PaginatedResponse<T>
-    <dominio>.ts       el enum Y la interface de ese dominio, juntos
-  lib/
-    apiClient.ts       instancia única de Axios
-    serverFetch.ts     fetch tipado para Server Components
-    messages.ts        UI_MESSAGES
-  config/
-    env.ts             validación Zod de las env vars
+proxy.ts                [OBJETIVO] hoy no hay protección de rutas en Edge Runtime
+app/
+  page.tsx, layout.tsx, globals.css
+  login/page.tsx
+  dashboard/page.tsx
+  patients/page.tsx, new/page.tsx, [id]/page.tsx
+                        (public)/(protected) [OBJETIVO] hoy las rutas están planas
+components/
+  <dominio>/           PatientsTable.tsx, NewPatientForm.tsx, EditPatientForm.tsx, ...
+                        <Dominio>Hydrator.tsx [OBJETIVO] hoy no hay store que hidratar
+  shell/               PageHeader.tsx
+config/
+  apiUrl.ts            resuelve y valida la URL del backend
+lib/
+  api/                 client.ts, patients.ts, auth.ts, dashboard.ts, episodes.ts,
+                        careServices.ts, catalogs.ts, responseSchemas.ts
+  domain/              patient.ts, careService.ts, authorizationStatus.ts
+  schemas/             <dominio>.ts — patient.ts, careService.ts, episode.ts, login.ts
+  format/              dateOnly.ts
+  hooks/               useHydrated.ts
+  store/               [OBJETIVO] hoy no existe: el estado vive en useState de cada page
+types/                  [OBJETIVO] hoy los tipos de cada endpoint salen de z.infer
+                        dentro de lib/api/*.ts
+tests/                  vitest + Testing Library, un archivo por feature
 ```
 
 ---
 
 ## Imports — alias `@/`, sin extensión
 
-`tsconfig.json` mapea `@/*` → `./src/*`. Es la única forma de importar entre
-carpetas de `src/`. El `moduleResolution` es `bundler`: **no lleva `.js`** (a
+`tsconfig.json` mapea `@/*` → `./*`. Es la única forma de importar entre
+carpetas del proyecto. El `moduleResolution` es `bundler`: **no lleva `.js`** (a
 diferencia del backend, que es ESM de Node y sí lo lleva).
 
 ```typescript
 // ✅ BIEN
-import { apiClient } from '@/lib/apiClient'
-import { UI_MESSAGES } from '@/lib/messages'
-import type { PatientListItem } from '@/types/patient'
-import { PatientStatus } from '@/types/patient'
+import { apiFetch } from '@/lib/api/client'
+import { UI_MESSAGES } from '@/lib/messages' // [OBJETIVO] — no existe todavía
+import type { PatientListItem } from '@/lib/domain/patient'
+import { PatientStatus } from '@/lib/domain/patient'
 
 // ❌ MAL — relativo, y con extensión de Node
-import { apiClient } from '../lib/apiClient.js'
+import { apiFetch } from '../lib/api/client.js'
 ```
 
 ---
@@ -165,24 +172,46 @@ devuelve `data: <la ficha>`, no `data: { patient: ... }`. Un listado paginado
 devuelve `data: <array>` y el total en `meta`, porque el total no es un paciente:
 es información sobre la ventana.
 
-Los dos envoltorios se declaran **una sola vez**, en `src/types/api.ts`, y ningún
-componente destructura una respuesta a mano — eso vive en `apiClient`.
+El **contrato** del envelope es el mismo en toda la API — `success`, `message`,
+`data`, y `meta` cuando hay ventana —, pero no hay una declaración genérica
+única que lo tipe. Un schema de Zod no es solo un tipo: es un parser que corre
+en runtime, y un parser no puede ser genérico sobre `T` sin una función
+factory que lo construya. Eso es justo lo que le faltaría a un
+`ApiResponse<T>`/`PaginatedResponse<T>` para existir de verdad — y es pensamiento
+de interface, de cuando el envelope era solo un tipo y otra cosa distinta
+parseaba la respuesta.
+
+Los envoltorios de forma fija sí se declaran **una sola vez**, en
+`lib/api/responseSchemas.ts`: `sessionEnvelopeSchema`, `emptySuccessEnvelopeSchema`
+y `errorEnvelopeSchema` (`lib/api/responseSchemas.ts:10,16,21`). Los que llevan
+un `data` variable se declaran **por endpoint**, junto al schema que describe
+esa forma, porque cada uno tiene una forma distinta: `patientListEnvelope` y
+`patientDetailEnvelope` en `lib/api/patients.ts:87-107`, y lo mismo en
+`lib/api/dashboard.ts:86`, `lib/api/episodes.ts:33,39` y
+`lib/api/careServices.ts:64,70`. En los dos casos, ningún componente
+destructura una respuesta a mano: eso vive siempre en `lib/api/client.ts`.
 
 ```typescript
-// src/types/api.ts
-export interface ApiResponse<T> {
-  success: boolean
-  message: string
-  data?: T
-  details?: readonly string[]
-}
+// lib/api/responseSchemas.ts — forma fija, un solo lugar
+export const sessionEnvelopeSchema = z.object({
+  success: z.literal(true),
+  message: z.string(),
+  data: userSchema,
+})
 
-export interface PaginatedResponse<T> {
-  success: boolean
-  message: string
-  data: T[]
-  meta: { limit: number; offset: number; total: number }
-}
+export const errorEnvelopeSchema = z.object({
+  success: z.literal(false),
+  message: z.string(),
+  details: z.array(z.string()).optional(),
+})
+
+// lib/api/patients.ts — data variable, declarado junto a su propio schema
+const patientListEnvelope = z.object({
+  success: z.literal(true),
+  message: z.string(),
+  data: z.array(patientSummarySchema),
+  meta: z.object({ limit: z.number(), offset: z.number(), total: z.number() }),
+})
 ```
 
 La paginación es por **ventana** (`limit`/`offset`), no por página: es lo que la
@@ -260,7 +289,7 @@ De schema.prisma (persistidos)
 
 De src/domain/enums/ (derivados, NO son columnas)
   PatientStatus        ACTIVO · REINGRESA · INTERNADO
-                       PENDIENTE_REAUTORIZACION · BAJA · FALLECIDO · SIN_INICIAR
+                       PENDIENTE_REAUTORIZACION · EGRESADO · FALLECIDO · SIN_INICIAR
   WorkQueue            ESPERANDO_ALTA · REAUTORIZAR · CERRADO · ARCHIVO
   AuthorizationStatus  VIGENTE · POR_VENCER · VENCIDA · SIN_AUTORIZACION
 ```
@@ -271,28 +300,34 @@ la misma regla, y la del cliente es la que se desactualiza.
 
 ### Cómo se escriben
 
-Conjunto fijo y conocido → `enum` de TypeScript, nunca union de string literals.
-Eso permite usarlos con `z.enum()` sin duplicar los valores entre el tipo y el
-schema.
+Conjunto fijo y conocido → objeto `as const` + union derivado con
+`keyof typeof`, nunca `enum` de TypeScript ni union de string literals sueltos.
+Un `Record` exhaustivo espejado a mano (`STATUS_PRESENTATION` en
+`lib/domain/patient.ts:62`) **no compila** cuando el backend agrega un valor y
+nadie tocó el frontend — es justo lo que se busca: un `string` suelto tragaría
+ese valor nuevo en silencio. Y Zod 4 acepta el objeto `as const` directo en
+`z.enum()`, sin reescribir los valores a mano.
 
 ```typescript
-// ❌ MAL — union type: falla con z.enum() y duplica los valores
-status: 'ACTIVO' | 'INTERNADO' | 'BAJA'
+// ❌ MAL — union type: sin exhaustividad, y duplica los valores del schema
+status: 'ACTIVO' | 'INTERNADO' | 'EGRESADO'
 
-// ✅ BIEN — src/types/patient.ts
-export enum PatientStatus {
-  ACTIVO = 'ACTIVO',
-  REINGRESA = 'REINGRESA',
-  INTERNADO = 'INTERNADO',
-  PENDIENTE_REAUTORIZACION = 'PENDIENTE_REAUTORIZACION',
-  BAJA = 'BAJA',
-  FALLECIDO = 'FALLECIDO',
-  SIN_INICIAR = 'SIN_INICIAR',
-}
+// ✅ BIEN — lib/domain/patient.ts
+export const PatientStatus = {
+  ACTIVO: 'ACTIVO',
+  REINGRESA: 'REINGRESA',
+  INTERNADO: 'INTERNADO',
+  PENDIENTE_REAUTORIZACION: 'PENDIENTE_REAUTORIZACION',
+  EGRESADO: 'EGRESADO',
+  FALLECIDO: 'FALLECIDO',
+  SIN_INICIAR: 'SIN_INICIAR',
+} as const
+
+export type PatientStatus = (typeof PatientStatus)[keyof typeof PatientStatus]
 ```
 
-Nombre en `PascalCase`, valores en `UPPER_SNAKE_CASE`. Y se **usan** como enum,
-no como string:
+Nombre en `PascalCase`, valores en `UPPER_SNAKE_CASE`. Y se **usan** como el
+objeto, no como string:
 
 ```typescript
 // ❌ MAL
@@ -312,16 +347,16 @@ y siguen las mismas reglas.
 
 ## Schemas Zod — uno por dominio, nunca inline
 
-Todo schema vive en `src/schemas/<dominio>Schema.ts`. El backend tiene el schema
+Todo schema vive en `lib/schemas/<dominio>.ts`. El backend tiene el schema
 equivalente en `interfaces/http/schemas/` — **esas son las reglas reales**; el
 frontend las replica (min/max/regex idénticos) para fallar antes de la request,
 no para inventar validaciones propias.
 
 ```typescript
-// src/schemas/patientSchema.ts
+// lib/schemas/patient.ts
 import { z } from 'zod'
-import { UI_MESSAGES } from '@/lib/messages'
-import { PatientStatus } from '@/types/patient'
+import { UI_MESSAGES } from '@/lib/messages' // [OBJETIVO] — no existe todavía
+import { PatientStatus } from '@/lib/domain/patient'
 
 export const createPatientSchema = z.object({
   firstName: z.string().min(2, { error: UI_MESSAGES.PATIENTS.FIRST_NAME_TOO_SHORT }),
@@ -382,20 +417,29 @@ result.error.issues   // antes: result.error.errors
 - `error` reemplaza a `message`, `invalid_type_error` y `errorMap`
 - `.merge()` deprecado → `.extend()` o destructuring de `.shape`
 - `z.record()` exige dos argumentos: `z.record(z.string(), z.number())`
-- `z.enum()` acepta el enum de TypeScript directo. **Nunca** reescribir los
+- `z.enum()` acepta el objeto `as const` directo. **Nunca** reescribir los
   valores a mano ni pasarle un `Object.values(...) as [string, ...string[]]`: el
-  cast rompe el tipo — el campo queda `string` — y duplica lo que ya existe
+  cast rompe el tipo — el campo queda `string` — y duplica lo que ya existe. Es
+  lo que hace hoy `role` en `lib/api/responseSchemas.ts:7`, con un array
+  literal en vez del objeto: el campo queda tipado `string`
 
 ---
 
-## Arquitectura — Server y Client Components
+## [OBJETIVO] Arquitectura — Server y Client Components
+
+> Hoy todas las páginas de datos son `'use client'` y piden a la API desde el
+> navegador (`app/patients/page.tsx:1,14-16`): «El pedido se hace en el
+> NAVEGADOR y no en el servidor de Next: la cookie de sesión la tiene el
+> navegador. Un componente de servidor pidiendo a la API llegaría sin
+> credenciales y comería un 401.» Antes de mover algo a Server Component hay
+> que resolver esa cookie.
 
 ```
 Server Components (RSC)          carga inicial de datos vía serverFetch (SSR)
-                                 sin Axios, sin Zustand, sin hooks de React
+                                 sin lib/api/*, sin Zustand, sin hooks de React
 Client Components ('use client') interacción del usuario
-                                 Axios + Zustand para mutaciones y estado
-proxy.ts (raíz, no src/)         protección de rutas en Edge Runtime
+                                 lib/api/* + Zustand [OBJETIVO] para mutaciones y estado
+proxy.ts                         protección de rutas en Edge Runtime
 ```
 
 | Situación                                          | Tipo             |
@@ -411,7 +455,11 @@ El dashboard es **una sola llamada** (`GET /api/dashboard`): trae contadores,
 corte por empresa, reclamos y bandejas. No se arma con N requests desde el
 cliente.
 
-### Regla de hidratación — el patrón Hydrator
+### [OBJETIVO] Regla de hidratación — el patrón Hydrator
+
+> Hoy no hay store ni Hydrator: cada página guarda sus propios datos con
+> `useState` (`app/patients/page.tsx:32`, `app/dashboard/page.tsx:34-35`) y no
+> hay paso de datos de un Server Component a uno Client vía props.
 
 Los datos van **siempre** en un solo sentido: Server Component → props → Client
 Component. Nunca al revés.
@@ -421,12 +469,12 @@ en un Client Component dedicado por dominio, `<Dominio>Hydrator.tsx`, que no
 renderiza nada:
 
 ```typescript
-// src/components/patients/PatientsHydrator.tsx
+// components/patients/PatientsHydrator.tsx
 'use client'
 
 import { useEffect } from 'react'
-import { usePatientsStore } from '@/store/usePatientsStore'
-import type { PatientListItem } from '@/types/patient'
+import { usePatientsStore } from '@/lib/store/usePatientsStore'
+import type { PatientListItem } from '@/lib/domain/patient'
 
 interface PatientsHydratorProps {
   patients: PatientListItem[]
@@ -446,13 +494,15 @@ export default function PatientsHydrator({ patients }: PatientsHydratorProps) {
 El Server Component lo monta arriba del árbol y después renderiza la UI:
 
 ```typescript
-// src/app/(protected)/patients/page.tsx — Server Component
+// app/(protected)/patients/page.tsx — Server Component
 export default async function PatientsPage() {
   let patients: PatientListItem[] = []
   try {
-    const res = await serverFetch<PaginatedResponse<PatientListItem>>('/patients', {
-      revalidate: false,
-    })
+    const res = await serverFetch(
+      '/patients',
+      { revalidate: false },
+      patientListEnvelope.parse,
+    )
     patients = res.data
   } catch (err) {
     if (err instanceof Error && err.message === 'UNAUTHORIZED') redirect('/login')
@@ -473,9 +523,13 @@ selectiva del boundary corre después del `hydrate()` del store y causa mismatch
 
 ---
 
-## Zustand — convenciones
+## [OBJETIVO] Zustand — convenciones
 
-Un store por dominio, en `src/store/use<Dominio>Store.ts`, con `'use client'` en
+> Hoy no existe Zustand ni ningún store: el estado vive en `useState` dentro
+> de cada página o componente (`app/patients/page.tsx`,
+> `components/patients/NewPatientForm.tsx`).
+
+Un store por dominio, en `lib/store/use<Dominio>Store.ts`, con `'use client'` en
 la primera línea del archivo.
 
 - **El estado inicial se hidrata desde el Server Component** vía `hydrate()`.
@@ -484,7 +538,7 @@ la primera línea del archivo.
   Se implementan como **funciones puras exportadas del store**, no como métodos:
   un método devuelve una referencia nueva en cada render y re-renderiza de más.
   El componente se suscribe a los datos crudos y aplica la función pura.
-- **Los componentes nunca llaman a Axios directo** — siempre vía el store.
+- **Los componentes nunca llaman a `fetch` directo** — siempre vía `lib/api/*`.
 - **Las mutaciones actualizan el estado local** con la respuesta del backend, sin
   re-fetch de la lista entera.
 - **Las mutaciones propagan el mensaje del backend**: se hace `throw` con el
@@ -512,7 +566,11 @@ episodios refetchea el paciente en vez de adivinar la bandeja nueva.
 
 ---
 
-## Mensajes de UI — lib/messages.ts
+## [OBJETIVO] Mensajes de UI — lib/messages.ts
+
+> Hoy no existe `lib/messages.ts`: los mensajes son literales en español en el
+> punto de uso (`lib/api/client.ts:50,85,131`,
+> `components/patients/NewPatientForm.tsx:175`).
 
 Todo string visible al usuario vive en `UI_MESSAGES`, agrupado por dominio, con
 `as const`. Ningún componente ni schema define un literal propio.
@@ -531,7 +589,12 @@ mensajes del backend. Las claves en inglés, como todo el código.
 
 ---
 
-## lib/serverFetch.ts — fetch tipado para Server Components
+## [OBJETIVO] lib/serverFetch.ts — fetch tipado para Server Components
+
+> Hoy no existe `lib/serverFetch.ts` ni ningún fetch del lado servidor: todas
+> las páginas son `'use client'` y piden desde el navegador con
+> `lib/api/client.ts` (ver la nota en «Arquitectura — Server y Client
+> Components», arriba).
 
 No usa Axios: Next.js extiende el `fetch` nativo con caché y revalidación.
 Reenvía las cookies de la request entrante para autenticar contra el backend.
@@ -547,31 +610,41 @@ vencimientos, y un dato de vencimiento cacheado es un reclamo que no se hace.
 
 ---
 
-## lib/api/client.ts — fetch con refresh y cola
+## lib/api/client.ts — fetch con refresh
 
 Cliente único con URL validada por `config/apiUrl.ts` y
 `credentials: 'include'` (obligatorio: sin eso el browser no manda las cookies
 httpOnly). Cada endpoint entrega un parser Zod explícito; el borde de red no
 castea JSON y un 204 nunca se afirma como un dato arbitrario.
 
-El interceptor de respuesta, ante un 401:
+`apiFetch`, ante un 401:
 
-1. Ignora los requests de `/auth/login` y `/auth/refresh` — si falla el refresh,
-   reintentarlo es un loop.
-2. Marca `_retry` para no reintentar dos veces el mismo request.
-3. Si ya hay un refresh en curso, **encola** el request y lo reintenta cuando
-   termina, en vez de disparar N refresh en paralelo.
+1. Ignora los requests contra `/api/auth/login`, `/api/auth/refresh` y
+   `/api/auth/logout` — si falla el refresh, reintentarlo ahí mismo es un
+   loop, y un logout no tiene sesión que renovar.
+2. Recuerda la generación de refresh vigente (`requestGeneration`) al momento
+   del pedido original, antes de mandarlo.
+3. Si nadie disparó un refresh desde esa generación, lo dispara y lo guarda
+   como el vuelo vigente (`latestRefresh`); si ya hay uno en curso — o uno
+   recién terminado, de una generación posterior a la del pedido —, se
+   **engancha a ese mismo vuelo** en vez de abrir otro en paralelo. No hace
+   falta una bandera `_retry`: cada pedido reintenta una sola vez por
+   construcción, nunca en loop.
 4. Si el refresh falla, propaga el 401 sin reintentar el pedido original.
 
-La generación del refresh conserva el vuelo ya terminado para que un 401 tardío
-de la misma tanda no inicie otra rotación. Esto es obligatorio porque el backend
+La generación conserva el vuelo ya terminado para que un 401 tardío de la
+misma tanda no inicie otra rotación. Esto es obligatorio porque el backend
 revoca la familia si recibe un refresh predecesor.
 
 **Nunca** leer ni escribir `access_token` ni `refresh_token` desde JavaScript.
 
 ---
 
-## proxy.ts — protección de rutas (Edge Runtime)
+## [OBJETIVO] proxy.ts — protección de rutas (Edge Runtime)
+
+> Hoy no existe `proxy.ts` ni ningún middleware de Edge: cada página maneja
+> el 401/403 por su cuenta con `router.replace('/login')` en el `catch`
+> (`app/patients/page.tsx:36-42`, `app/dashboard/page.tsx`).
 
 Vive en la raíz del proyecto, no en `src/`. Corre en Edge: **no puede validar el
 JWT** (no tiene crypto), solo verifica que la cookie exista y, si el `exp` está
@@ -585,10 +658,15 @@ un token vencido.
 
 ---
 
-## react-hook-form + Zod
+## [OBJETIVO] react-hook-form + Zod
+
+> Hoy no hay `react-hook-form`: los formularios usan `FormData` nativo del
+> elemento `<form>`, parsean con el schema de Zod correspondiente y
+> deshabilitan el submit hasta que `useHydrated()` confirma que React ya tomó
+> control (`components/patients/NewPatientForm.tsx`).
 
 Todo formulario usa `react-hook-form` con `@hookform/resolvers/zod` y el schema
-importado de `src/schemas/`. Nunca se duplica una regla de validación dentro del
+importado de `lib/schemas/`. Nunca se duplica una regla de validación dentro del
 componente.
 
 ```typescript
@@ -596,7 +674,7 @@ componente.
 
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { loginSchema, type LoginFormValues } from '@/schemas/authSchema'
+import { loginSchema, type LoginFormValues } from '@/lib/schemas/login'
 
 export default function LoginForm() {
   const { register, handleSubmit, formState: { errors, isSubmitting } } =
@@ -616,10 +694,10 @@ marca **todos** a la vez. Para eso se mandaron todos juntos.
 Archivos de Next.js:   minúscula fija       page.tsx, layout.tsx
 Componentes React:     PascalCase           PatientsTable.tsx, LoginForm.tsx
 Hydrators:             <Dominio>Hydrator    PatientsHydrator.tsx
-Stores Zustand:        use+PascalCase+Store usePatientsStore.ts
-Schemas:               <dominio>Schema.ts   patientSchema.ts
-Tipos de dominio:      <dominio>.ts         patient.ts, episode.ts
-Archivos lib/config:   camelCase            apiClient.ts, env.ts
+Stores Zustand:        use+PascalCase+Store usePatientsStore.ts [OBJETIVO]
+Schemas:               lib/schemas/<dominio>.ts  patient.ts, episode.ts
+Tipos de dominio:      lib/domain/<dominio>.ts   patient.ts, careService.ts
+Archivos lib/config:   camelCase            client.ts, apiUrl.ts
 Variables/funciones:   camelCase            fetchPatients(), closeEpisode()
 Tipos/interfaces:      PascalCase           PatientListItem, DashboardSummary
 Enums:                 PascalCase (nombre) + UPPER_SNAKE_CASE (valor)
@@ -649,7 +727,7 @@ export enum FrequencyUnit {   // nombre en inglés
 ## Variables de entorno
 
 ```env
-NEXT_PUBLIC_API_URL=http://localhost:4000/api
+NEXT_PUBLIC_API_URL=http://localhost:4000
 ```
 
 La única variable del frontend. Solo `NEXT_PUBLIC_*` llega al browser y queda
@@ -689,12 +767,37 @@ con su motivo. Ese mensaje se muestra tal cual.
 
 ```
 Backend propio · API routes de negocio · base de datos · Prisma
-fetch nativo (salvo serverFetch, que es el fetch de Next) · localStorage
+fetch directo fuera de lib/api/client.ts · localStorage
 sessionStorage · Bearer tokens · JWT leído desde JavaScript
 cookies escritas desde JavaScript · npm / yarn · kebab-case en componentes
-imports relativos entre carpetas de src/ · z.nativeEnum()
+imports relativos entre carpetas del proyecto · z.nativeEnum()
 mensajes hardcodeados · lógica de negocio en componentes
 derivación de estado/bandeja/cobertura en el cliente
 ```
+
+---
+
+## Migraciones pendientes — lo marcado `[OBJETIVO]`
+
+Convenciones ya decididas que el código todavía no cumple. **Verificá antes de
+importar cualquiera de estas.**
+
+| Pendiente | Hoy | Por qué se migra |
+| --- | --- | --- |
+| shadcn/ui | Sin librería de componentes; los controles se arman a mano con Tailwind | Componentes accesibles y consistentes sin reinventar cada control |
+| Zustand (`lib/store/`) | Cada página guarda su estado con `useState` (`app/patients/page.tsx`, `app/dashboard/page.tsx`) | Estado compartido entre componentes sin prop-drilling, y mutaciones que actualizan sin refetch completo |
+| react-hook-form + @hookform/resolvers | `FormData` nativo del `<form>`, parseado con el schema de Zod y deshabilitado hasta `useHydrated()` (`components/patients/NewPatientForm.tsx`) | Menos estado manual por campo, con los errores del resolver integrados al schema |
+| framer-motion | Sin animaciones de transición | Transiciones consistentes entre estados de carga y vistas |
+| sonner | Los errores se muestran inline con `role="alert"`, no en toast | Notificaciones no bloqueantes y consistentes en toda la app |
+| `lib/messages.ts` (`UI_MESSAGES`) | Los mensajes son literales en español en el punto de uso (`lib/api/client.ts:50,85,131`) | Centralizar el texto visible evita duplicar y desincronizar el mismo mensaje en dos lugares |
+| `proxy.ts` (Edge Runtime) | Cada página maneja el 401/403 por su cuenta con `router.replace('/login')` en el `catch` (`app/patients/page.tsx:36-42`) | Cortar una sesión vencida antes de empezar el render evita pedir datos con una cookie que ya no sirve |
+| Route groups `(public)`/`(protected)` | Las rutas están planas en `app/` (`app/login`, `app/dashboard`, `app/patients`) | Agrupar por autenticación documenta la intención en la estructura, sin que cada página repita la misma lógica |
+| Patrón Hydrator (`<Dominio>Hydrator.tsx`) | No hay store que hidratar: no hace falta pasar datos de un Server Component a uno Client | Es el paso que conecta el fetch inicial en el servidor con el estado del store, si Zustand se adopta |
+| Server Components para carga inicial + `lib/serverFetch.ts` | Todas las páginas de datos son `'use client'` y piden a la API desde el navegador (`app/patients/page.tsx:14-16`) | Quedó pendiente desde el diseño original, pero migrarlo exige resolver antes cómo llega la cookie de sesión a un Server Component sin exponerla — hoy la decisión vigente es no moverlo |
+| `types/` — tipos de dominio consolidados | Los tipos de cada endpoint salen de `z.infer` dentro de `lib/api/*.ts` (ej. `lib/api/patients.ts`); los enums derivados viven en `lib/domain/` | Separar la forma del dato del archivo que hace la llamada de red deja más claro qué es dominio y qué es transporte |
+
+**Hecho** — el envelope único de respuesta, parseado con Zod en
+`lib/api/responseSchemas.ts`, y los enums derivados como objeto `as const` +
+union en `lib/domain/` (`lib/domain/patient.ts`).
 
 @AGENTS.md
