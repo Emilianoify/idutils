@@ -27,12 +27,21 @@ export const NodeEnv = {
 
 export type NodeEnv = (typeof NodeEnv)[keyof typeof NodeEnv]
 
+export const CookieSecure = {
+  /** Se sirve por HTTPS: el browser acepta la cookie `Secure`. */
+  ENABLED: 'true',
+  /** HTTP plano. Es el unico valor que sirve en desarrollo local. */
+  DISABLED: 'false',
+} as const
+
+export type CookieSecure = (typeof CookieSecure)[keyof typeof CookieSecure]
+
 const envSchema = z
   .object({
     DATABASE_URL: z.string().min(1, { error: ERROR_MESSAGES.ENV.DATABASE_URL_INVALID }),
 
     NODE_ENV: z
-      .enum([NodeEnv.DEVELOPMENT, NodeEnv.PRODUCTION, NodeEnv.TEST], {
+      .enum(NodeEnv, {
         error: ERROR_MESSAGES.ENV.NODE_ENV_INVALID,
       })
       .default(NodeEnv.DEVELOPMENT),
@@ -62,9 +71,9 @@ const envSchema = z
      * cookie y el sintoma es un login que "no hace nada".
      */
     COOKIE_SECURE: z
-      .enum(['true', 'false'], { error: ERROR_MESSAGES.ENV.COOKIE_SECURE_INVALID })
-      .default('false')
-      .transform((value) => value === 'true'),
+      .enum(CookieSecure, { error: ERROR_MESSAGES.ENV.COOKIE_SECURE_INVALID })
+      .default(CookieSecure.DISABLED)
+      .transform((value) => value === CookieSecure.ENABLED),
 
     /**
      * Saltos de reverse proxy en los que confiar. En Docker detras de nginx

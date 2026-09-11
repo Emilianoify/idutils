@@ -14,9 +14,6 @@ import {
  * quiera. Lo único que viaja al frontend es quién sos.
  */
 
-export const roleSchema = z.enum(['ADMIN', 'OPERADOR', 'LECTOR'])
-export type Role = z.infer<typeof roleSchema>
-
 export type User = z.infer<typeof userSchema>
 
 export interface Credentials {

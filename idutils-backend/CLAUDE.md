@@ -515,7 +515,7 @@ se olvida de actualizar. La estructura no se olvida.
 
 ```
 PatientStatus        ACTIVO · REINGRESA · INTERNADO · PENDIENTE_REAUTORIZACION
-                     BAJA · FALLECIDO · SIN_INICIAR
+                     EGRESADO · FALLECIDO · SIN_INICIAR
                      → derivado de los episodios, con statusAt()
 WorkQueue            ESPERANDO_ALTA · REAUTORIZAR · CERRADO · ARCHIVO
                      → el motivo de cierre decide qué aparece como pendiente
@@ -542,11 +542,13 @@ export type WorkQueue = (typeof WorkQueue)[keyof typeof WorkQueue]
 pueden usarla sin romper la regla de dependencias. Zod 4 acepta ese objeto
 directo en `z.enum()`.
 
-**Nunca como array de strings dentro de `z.enum([...])`** — eso deja el campo
-tipado `string`, duplica los valores y no autocompleta:
+**Nunca como array de strings dentro de `z.enum([...])`** — el tipo infiere
+bien, y ese es justamente el problema: los valores quedan escritos en dos
+lugares y nada falla el día que se desincronizan. Si el enum agrega un
+miembro, el schema deja de aceptarlo en silencio.
 
 ```typescript
-// ❌ MAL — el campo queda 'string', no WorkQueue
+// ❌ MAL — el enum ya está declarado arriba; esto lo repite y se desincroniza
 queue: z.enum(['ESPERANDO_ALTA', 'REAUTORIZAR'])
 
 // ✅ BIEN
@@ -554,15 +556,28 @@ import { WorkQueue } from '../../../domain/enums/workQueue.js'
 queue: z.enum(WorkQueue, { error: ERROR_MESSAGES.GENERAL.VALIDATION_ERROR })
 ```
 
-**Cómo se verifica que quedó bien**: `pnpm build` en verde no alcanza — si el
-enum quedara mal, el tipo inferido sería `string` y compilaría igual. La prueba
-es negativa:
+**Cómo se verifica que quedó bien**: el tipo inferido no alcanza como prueba —
+un array literal inline infiere el union correcto y compila igual que el
+objeto. Lo que el compilador sí frena es el cast
+`Object.values(x) as [string, ...string[]]`, y para eso sirve la prueba
+negativa:
 
 ```typescript
 type Inferido = ListPatientsDto['queue']
 const _control: Inferido = 'CUALQUIER_COSA'
 // tiene que dar: Type '"CUALQUIER_COSA"' is not assignable to type 'WorkQueue'
 ```
+
+La duplicación el compilador no la ve. Esa se busca leyendo, o con
+`rg "\.enum\(\[" src prisma tests`, que tiene que dar cero.
+
+El patrón no lleva `z\.` adelante **a propósito, y no hay que "simplificarlo"**:
+los schemas de este repo se escriben multilínea, así que `z` queda en un
+renglón y `.enum([` en el siguiente (mirá `src/infrastructure/config/env.ts` y
+`prisma/seed/seedEnv.ts`). Un `rg "z\.enum\(\["` da cero acá aunque el problema
+exista, y esa es la peor respuesta posible: parece limpio. La búsqueda se
+acota a `src prisma tests` porque el bloque `❌ MAL` de más arriba vive en este
+mismo archivo y contaría como falso positivo.
 
 Si el enum viaja al frontend, los valores tienen que ser **idénticos** a los de
 su espejo. Cambiar uno acá rompe el frontend en silencio: el JSON sigue siendo
@@ -572,6 +587,13 @@ válido, solo deja de matchear.
 
 `NodeEnv`, `CookieSecure` y compañía no son del negocio: viven en
 `infrastructure/config/env.ts`, no en `domain/enums/`.
+
+Cada variable de entorno declara su enum en el módulo que la valida: `NodeEnv`
+y `CookieSecure` en `infrastructure/config/env.ts`, `SeedDemo` en
+`prisma/seed/seedEnv.ts`. `SEED_DEMO` y `COOKIE_SECURE` aceptan los mismos dos
+strings y aun así no comparten declaración: coinciden en la forma, no en el
+concepto, y unificarlos ataría los datos de demo a la seguridad de las
+cookies.
 
 ---
 
@@ -680,21 +702,36 @@ no un `name` plano).
 
 ## Repositorios Prisma — sin cast, sin reinicialización
 
-`prismaClient.ts` exporta una instancia ya tipada con el adapter de Postgres.
-Ningún repositorio vuelve a instanciar `PrismaClient` ni castea el import.
+`prismaClient.ts` exporta `createPrismaClient`, una función que arma el cliente
+una sola vez en el arranque del proceso (`main.ts`) — nunca un singleton
+importable, porque el proceso HTTP, el seed y los tests de integración
+necesitan cada uno el suyo. Los repositorios reciben el `PrismaContext` ya
+armado por parámetro; ninguno instancia su propio `PrismaClient` ni castea el
+contexto para esquivar el tipo.
 
 ```typescript
-// ❌ MAL — reinstancia y castea algo que ya viene tipado
-const client = prisma as PrismaClient
+// ❌ MAL — castea en vez de recibir el tipo correcto
+export function createPrismaPatientRepository(context: unknown): IPatientRepository {
+  const { executor } = context as PrismaContext
+  return {
+    async findById(id) {
+      const row = await executor.patient.findFirst({ where: { id, deletedAt: null } })
+      return row === null ? null : toPatient(row)
+    },
+  }
+}
 
-// ✅ BIEN
-import { prisma } from '../prismaClient.js'
+// ✅ BIEN — el contexto llega ya tipado, armado una sola vez en el arranque
+import type { PrismaContext } from '../database/prismaContext.js'
 
-export class PatientRepository implements IPatientRepository {
-  async findByAffiliation(insuranceProviderId: string, memberNumber: string) {
-    return prisma.affiliation.findFirst({
-      where: { insuranceProviderId, memberNumber, to: null, deletedAt: null },
-    })
+export function createPrismaPatientRepository(context: PrismaContext): IPatientRepository {
+  const { executor } = context
+
+  return {
+    async findById(id) {
+      const row = await executor.patient.findFirst({ where: { id, deletedAt: null } })
+      return row === null ? null : toPatient(row)
+    },
   }
 }
 ```
@@ -726,9 +763,12 @@ TLS real adelante, no del entorno. Un browser descarta en silencio una cookie
 devuelve 200, la cookie se pierde, y la siguiente request cae a `/login`.
 
 ```typescript
-import { env } from '../../../infrastructure/config/env.js'
+// main.ts — el único lugar que lee el entorno
+const env = loadEnv()
+const app = createApp({ /* ...otras dependencias... */, cookieSecure: env.COOKIE_SECURE })
 
-const cookieSecure = env.COOKIE_SECURE  // true SOLO si hay HTTPS adelante
+// interfaces/http/controllers/authController.ts — lo recibe por parámetro
+const { cookieSecure } = dependencies  // nunca `import { env }` acá
 
 res.cookie('access_token', token, {
   httpOnly: true,

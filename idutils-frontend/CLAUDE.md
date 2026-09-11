@@ -102,7 +102,7 @@ config/
 lib/
   api/                 client.ts, patients.ts, auth.ts, dashboard.ts, episodes.ts,
                         careServices.ts, catalogs.ts, responseSchemas.ts
-  domain/              patient.ts, careService.ts, authorizationStatus.ts
+  domain/              patient.ts, careService.ts, authorizationStatus.ts, role.ts
   schemas/             <dominio>.ts — patient.ts, careService.ts, episode.ts, login.ts
   format/              dateOnly.ts
   hooks/               useHydrated.ts
@@ -124,7 +124,7 @@ diferencia del backend, que es ESM de Node y sí lo lleva).
 // ✅ BIEN
 import { apiFetch } from '@/lib/api/client'
 import { UI_MESSAGES } from '@/lib/messages' // [OBJETIVO] — no existe todavía
-import type { PatientListItem } from '@/lib/domain/patient'
+import type { PatientSummary } from '@/lib/api/patients'
 import { PatientStatus } from '@/lib/domain/patient'
 
 // ❌ MAL — relativo, y con extensión de Node
@@ -138,7 +138,7 @@ import { apiFetch } from '../lib/api/client.js'
 `tsconfig.json` tiene, además de `strict`:
 
 ```
-noUncheckedIndexedAccess   → rows[0] es PatientListItem | undefined, siempre
+noUncheckedIndexedAccess   → rows[0] es PatientSummary | undefined, siempre
 exactOptionalPropertyTypes → { a?: string } NO acepta { a: undefined }
 ```
 
@@ -253,15 +253,18 @@ export interface Patient {
   deletedAt: string | null
 }
 
-// ✅ BIEN — copiado del DTO: es lo que devuelve GET /api/patients
-export interface PatientListItem {
-  id: string
-  fullName: string
-  insuranceProvider: { id: string; name: string } | null
-  company: { id: string; name: string } | null
-  status: PatientStatus     // derivado, viene calculado
-  queue: WorkQueue          // derivado, viene calculado
-}
+// ✅ BIEN — copiado del schema: es lo que devuelve GET /api/patients
+const patientSummarySchema = z.object({
+  id: z.string(),
+  lastName: z.string(),
+  firstName: z.string(),
+  documentNumber: z.string().nullable(),
+  status: z.enum(PatientStatus),                  // derivado, viene calculado
+  insuranceProviderName: z.string().nullable(),
+  memberNumber: z.string().nullable(),
+})
+
+export type PatientSummary = z.infer<typeof patientSummarySchema>
 ```
 
 **Antes de escribir un tipo nuevo**: abrir el DTO y el mapper del backend y
@@ -417,11 +420,12 @@ result.error.issues   // antes: result.error.errors
 - `error` reemplaza a `message`, `invalid_type_error` y `errorMap`
 - `.merge()` deprecado → `.extend()` o destructuring de `.shape`
 - `z.record()` exige dos argumentos: `z.record(z.string(), z.number())`
-- `z.enum()` acepta el objeto `as const` directo. **Nunca** reescribir los
-  valores a mano ni pasarle un `Object.values(...) as [string, ...string[]]`: el
-  cast rompe el tipo — el campo queda `string` — y duplica lo que ya existe. Es
-  lo que hace hoy `role` en `lib/api/responseSchemas.ts:7`, con un array
-  literal en vez del objeto: el campo queda tipado `string`
+- `z.enum()` acepta el objeto `as const` directo. **Nunca** pasarle un
+  `Object.values(...) as [string, ...string[]]`: el cast rompe el tipo — el
+  campo queda `string`. El array literal escrito a mano sí infiere bien, y
+  está prohibido igual: duplica un conjunto de valores que ya está declarado
+  en `lib/domain/`, y el día que el backend agregue uno, el schema lo rechaza
+  sin que nada falle
 
 ---
 
@@ -433,6 +437,8 @@ result.error.issues   // antes: result.error.errors
 > navegador. Un componente de servidor pidiendo a la API llegaría sin
 > credenciales y comería un 401.» Antes de mover algo a Server Component hay
 > que resolver esa cookie.
+
+**Mientras tanto:** pedí los datos desde el cliente con `lib/api/*`, como en `app/patients/page.tsx:1,14-16`.
 
 ```
 Server Components (RSC)          carga inicial de datos vía serverFetch (SSR)
@@ -461,12 +467,14 @@ cliente.
 > `useState` (`app/patients/page.tsx:32`, `app/dashboard/page.tsx:34-35`) y no
 > hay paso de datos de un Server Component a uno Client vía props.
 
-Los datos van **siempre** en un solo sentido: Server Component → props → Client
+**Mientras tanto:** guardá el estado con `useState` en la página, como en `app/patients/page.tsx:32`.
+
+Los datos van a ir **siempre** en un solo sentido: Server Component → props → Client
 Component. Nunca al revés.
 
-La hidratación del store no se hace en el componente que consume los datos, sino
-en un Client Component dedicado por dominio, `<Dominio>Hydrator.tsx`, que no
-renderiza nada:
+La hidratación del store no se hará en el componente que consume los datos, sino
+en un Client Component dedicado por dominio, `<Dominio>Hydrator.tsx`, que no va a
+renderizar nada:
 
 ```typescript
 // components/patients/PatientsHydrator.tsx
@@ -474,10 +482,10 @@ renderiza nada:
 
 import { useEffect } from 'react'
 import { usePatientsStore } from '@/lib/store/usePatientsStore'
-import type { PatientListItem } from '@/lib/domain/patient'
+import type { PatientSummary } from '@/lib/api/patients'
 
 interface PatientsHydratorProps {
-  patients: PatientListItem[]
+  patients: PatientSummary[]
 }
 
 export default function PatientsHydrator({ patients }: PatientsHydratorProps) {
@@ -491,12 +499,12 @@ export default function PatientsHydrator({ patients }: PatientsHydratorProps) {
 }
 ```
 
-El Server Component lo monta arriba del árbol y después renderiza la UI:
+El Server Component lo va a montar arriba del árbol y después va a renderizar la UI:
 
 ```typescript
 // app/(protected)/patients/page.tsx — Server Component
 export default async function PatientsPage() {
-  let patients: PatientListItem[] = []
+  let patients: PatientSummary[] = []
   try {
     const res = await serverFetch(
       '/patients',
@@ -529,25 +537,27 @@ selectiva del boundary corre después del `hydrate()` del store y causa mismatch
 > de cada página o componente (`app/patients/page.tsx`,
 > `components/patients/NewPatientForm.tsx`).
 
+**Mientras tanto:** manejá el estado con `useState` en la página o el componente, como en `app/patients/page.tsx`.
+
 Un store por dominio, en `lib/store/use<Dominio>Store.ts`, con `'use client'` en
 la primera línea del archivo.
 
-- **El estado inicial se hidrata desde el Server Component** vía `hydrate()`.
-  Ningún store fetchea su propia carga inicial en un `useEffect`.
-- **Los filtros y el orden son del lado cliente, en memoria** — no re-fetchean.
-  Se implementan como **funciones puras exportadas del store**, no como métodos:
+- **El estado inicial se hidratará desde el Server Component** vía `hydrate()`.
+  Ningún store deberá fetchear su propia carga inicial en un `useEffect`.
+- **Los filtros y el orden van a ser del lado cliente, en memoria** — no van a re-fetchear.
+  Se van a implementar como **funciones puras exportadas del store**, no como métodos:
   un método devuelve una referencia nueva en cada render y re-renderiza de más.
-  El componente se suscribe a los datos crudos y aplica la función pura.
+  El componente se va a suscribir a los datos crudos y va a aplicar la función pura.
 - **Los componentes nunca llaman a `fetch` directo** — siempre vía `lib/api/*`.
-- **Las mutaciones actualizan el estado local** con la respuesta del backend, sin
+- **Las mutaciones van a actualizar el estado local** con la respuesta del backend, sin
   re-fetch de la lista entera.
-- **Las mutaciones propagan el mensaje del backend**: se hace `throw` con el
-  `message` que vino en la respuesta, y `UI_MESSAGES` es el fallback. El
-  componente lo captura y lo muestra en un toast. Los mensajes del backend están
+- **Las mutaciones van a propagar el mensaje del backend**: se hará `throw` con el
+  `message` que vino en la respuesta, y `UI_MESSAGES` va a ser el fallback. El
+  componente lo va a capturar y lo va a mostrar en un toast. Los mensajes del backend están
   redactados para el operador y dicen **qué hacer** — pisarlos con uno genérico
   es perder información.
-- `isLoading` / `error` solo existen en los stores que mutan. Un store de puro
-  listado hidratado + filtros en memoria no los necesita: no los agregues por
+- `isLoading` / `error` solo van a existir en los stores que mutan. Un store de puro
+  listado hidratado + filtros en memoria no los va a necesitar: no deberán agregarse por
   simetría.
 
 ### Cuándo un store necesita `refetch`
@@ -556,13 +566,13 @@ No por simetría. La pregunta es: **después de la mutación, ¿podés calcular 
 estado nuevo con lo que devolvió la respuesta?**
 
 - **Sí** → actualizás local, sin refetch.
-- **No** → refetch, y **va en el store que disparó la mutación**, no en el que
+- **No** → refetch, y **va a ir en el store que disparó la mutación**, no en el que
   posee los datos. Cross-store siempre con `getState()`, nunca con el hook: corre
   fuera de React.
 
 Caso típico de "no" en IDUtils: cerrar un episodio cambia el `status` y la
 `queue` del paciente, y los dos son **derivados en el backend**. Ahí el store de
-episodios refetchea el paciente en vez de adivinar la bandeja nueva.
+episodios va a refetchear el paciente en vez de adivinar la bandeja nueva.
 
 ---
 
@@ -572,8 +582,10 @@ episodios refetchea el paciente en vez de adivinar la bandeja nueva.
 > punto de uso (`lib/api/client.ts:50,85,131`,
 > `components/patients/NewPatientForm.tsx:175`).
 
-Todo string visible al usuario vive en `UI_MESSAGES`, agrupado por dominio, con
-`as const`. Ningún componente ni schema define un literal propio.
+**Mientras tanto:** escribí los mensajes como literales en el punto de uso, como en `lib/api/client.ts:50,85,131`.
+
+El objetivo es que todo string visible al usuario viva en `UI_MESSAGES`, agrupado por dominio, con
+`as const`. Ningún componente ni schema va a definir un literal propio.
 
 ```typescript
 export const UI_MESSAGES = {
@@ -596,8 +608,10 @@ mensajes del backend. Las claves en inglés, como todo el código.
 > `lib/api/client.ts` (ver la nota en «Arquitectura — Server y Client
 > Components», arriba).
 
-No usa Axios: Next.js extiende el `fetch` nativo con caché y revalidación.
-Reenvía las cookies de la request entrante para autenticar contra el backend.
+**Mientras tanto:** pedí los datos desde el navegador con `lib/api/client.ts`.
+
+No va a usar Axios: Next.js extiende el `fetch` nativo con caché y revalidación.
+Va a reenviar las cookies de la request entrante para autenticar contra el backend.
 
 ```
 revalidate: number  → ISR, revalida cada N segundos
@@ -646,14 +660,16 @@ revoca la familia si recibe un refresh predecesor.
 > el 401/403 por su cuenta con `router.replace('/login')` en el `catch`
 > (`app/patients/page.tsx:36-42`, `app/dashboard/page.tsx`).
 
-Vive en la raíz del proyecto, no en `src/`. Corre en Edge: **no puede validar el
-JWT** (no tiene crypto), solo verifica que la cookie exista y, si el `exp` está
-vencido, redirige **una sola vez** al Route Handler de refresh, que rota la
-sesión, propaga todos los `Set-Cookie` y vuelve a la ruta original.
+**Mientras tanto:** manejá el 401/403 en el `catch` de cada página con `router.replace('/login')`, como en `app/patients/page.tsx:36-42`.
+
+Va a vivir en la raíz del proyecto, no en `src/`. Corre en Edge: **no puede validar el
+JWT** (no tiene crypto), solo va a verificar que la cookie exista y, si el `exp` está
+vencido, va a redirigir **una sola vez** al Route Handler de refresh, que va a rotar la
+sesión, va a propagar todos los `Set-Cookie` y va a volver a la ruta original.
 
 La firma y la vigencia reales las valida siempre el backend, y además **lee el
 usuario de la base en cada pedido**: una baja o un cambio de rol tiene efecto
-inmediato, no dentro de quince minutos. El proxy solo evita empezar un render con
+inmediato, no dentro de quince minutos. El proxy solo va a evitar empezar un render con
 un token vencido.
 
 ---
@@ -665,7 +681,9 @@ un token vencido.
 > deshabilitan el submit hasta que `useHydrated()` confirma que React ya tomó
 > control (`components/patients/NewPatientForm.tsx`).
 
-Todo formulario usa `react-hook-form` con `@hookform/resolvers/zod` y el schema
+**Mientras tanto:** parseá el `FormData` nativo con el schema de Zod y esperá a `useHydrated()`, como en `components/patients/NewPatientForm.tsx`.
+
+Todo formulario deberá usar `react-hook-form` con `@hookform/resolvers/zod` y el schema
 importado de `lib/schemas/`. Nunca se duplica una regla de validación dentro del
 componente.
 
@@ -674,11 +692,11 @@ componente.
 
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { loginSchema, type LoginFormValues } from '@/lib/schemas/login'
+import { loginSchema, type LoginInput } from '@/lib/schemas/login'
 
 export default function LoginForm() {
   const { register, handleSubmit, formState: { errors, isSubmitting } } =
-    useForm<LoginFormValues>({ resolver: zodResolver(loginSchema) })
+    useForm<LoginInput>({ resolver: zodResolver(loginSchema) })
   // ...
 }
 ```
@@ -699,7 +717,7 @@ Schemas:               lib/schemas/<dominio>.ts  patient.ts, episode.ts
 Tipos de dominio:      lib/domain/<dominio>.ts   patient.ts, careService.ts
 Archivos lib/config:   camelCase            client.ts, apiUrl.ts
 Variables/funciones:   camelCase            fetchPatients(), closeEpisode()
-Tipos/interfaces:      PascalCase           PatientListItem, DashboardSummary
+Tipos/interfaces:      PascalCase           PatientSummary, DashboardSummary
 Enums:                 PascalCase (nombre) + UPPER_SNAKE_CASE (valor)
 ```
 
@@ -714,9 +732,12 @@ tipos, miembros de enum) van en inglés; los valores (contenido de un enum,
 mensajes, labels, `id`/`htmlFor` de los formularios) van en español.
 
 ```typescript
-export enum FrequencyUnit {   // nombre en inglés
-  SEMANAL = 'SEMANAL',        // valor en español — lo define schema.prisma
-}
+export const FrequencyUnit = {   // nombre en inglés
+  SEMANAL: 'SEMANAL',            // valor en español — lo define schema.prisma
+  MENSUAL: 'MENSUAL',
+} as const
+
+export type FrequencyUnit = (typeof FrequencyUnit)[keyof typeof FrequencyUnit]
 
 <Label htmlFor="edit-apellido">Apellido</Label>  // texto de UI: español
 {...register('lastName')}                         // campo del schema: inglés

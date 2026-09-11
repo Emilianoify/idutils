@@ -1,6 +1,15 @@
 import 'dotenv/config'
 import { z } from 'zod'
 
+export const SeedDemo = {
+  /** Se siembran la obra social, la empresa, la localidad y el profesional de ejemplo. */
+  ENABLED: 'true',
+  /** Apagado por defecto: "SanityCare" no entra en una instalacion de verdad. */
+  DISABLED: 'false',
+} as const
+
+export type SeedDemo = (typeof SeedDemo)[keyof typeof SeedDemo]
+
 /**
  * El entorno que necesita el SEED. Su propio esquema, no el de la aplicacion.
  *
@@ -27,17 +36,10 @@ const seedEnvSchema = z.object({
 
   SEED_ADMIN_NAME: z.string().min(1).default('Administración'),
 
-  /**
-   * Datos de ejemplo para poder probar la API a mano: una obra social, una
-   * empresa con convenio, una localidad y un profesional.
-   *
-   * Apagado por defecto. Es la separacion que evita que "SanityCare" termine
-   * en el selector de una coordinacion de verdad.
-   */
   SEED_DEMO: z
-    .enum(['true', 'false'])
-    .default('false')
-    .transform((value) => value === 'true'),
+    .enum(SeedDemo)
+    .default(SeedDemo.DISABLED)
+    .transform((value) => value === SeedDemo.ENABLED),
 })
 
 export type SeedEnv = z.infer<typeof seedEnvSchema>

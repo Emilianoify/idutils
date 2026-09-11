@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import DashboardPage from '@/app/dashboard/page'
+import type { Role } from '@/lib/domain/role'
 
 const { replace, logout } = vi.hoisted(() => ({
   replace: vi.fn(),
@@ -13,7 +14,7 @@ vi.mock('@/lib/api/auth', () => ({
     id: '1',
     email: 'ana@example.com',
     name: 'Ana',
-    role: 'ADMIN',
+    role: 'ADMIN' satisfies Role,
   })),
   logout,
 }))

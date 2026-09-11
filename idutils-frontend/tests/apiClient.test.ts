@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
+import type { Role } from '@/lib/domain/role'
 
 const envelopeSchema = z.object({
   success: z.literal(true),
@@ -17,7 +18,7 @@ function json(status: number, body: unknown): Response {
 const sessionBody = {
   success: true,
   message: 'Sesión renovada',
-  data: { id: '1', email: 'a@example.com', name: 'Ana', role: 'ADMIN' },
+  data: { id: '1', email: 'a@example.com', name: 'Ana', role: 'ADMIN' satisfies Role },
 }
 
 afterEach(() => {

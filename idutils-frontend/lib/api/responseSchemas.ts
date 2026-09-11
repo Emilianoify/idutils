@@ -1,10 +1,11 @@
 import { z } from 'zod'
+import { Role } from '@/lib/domain/role'
 
 export const userSchema = z.object({
   id: z.string(),
   email: z.string(),
   name: z.string(),
-  role: z.enum(['ADMIN', 'OPERADOR', 'LECTOR']),
+  role: z.enum(Role),
 })
 
 export const sessionEnvelopeSchema = z.object({
